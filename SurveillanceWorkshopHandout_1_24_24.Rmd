@@ -1,0 +1,386 @@
+---
+title: "Survallience Handout Workshop"
+output:
+  html_document: default
+  pdf_document: default
+date: "2024-1-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup2, include=FALSE}
+### ### Load libraries 
+library(tidyverse)
+library(readxl)
+library(knitcitations)
+library(kableExtra) ## devtools::install_github("kupietz/kableExtra") #some issue needed patching
+
+### ### Read in data
+countytbl <- read_excel("Tablesfrom2022DeerHarvestReport.xlsx", sheet = "Table012")
+PercentSeason <- read_excel("Tablesfrom2022DeerHarvestReport.xlsx", sheet = "PercentSeason")
+
+### ### Initial cleaning
+# Drop extra columns from dataframe 
+countytbl <- countytbl %>% dplyr::select(-Total, -HarvestperSqMile)
+countytbl_long <- countytbl %>% 
+  pivot_longer(cols = !c(County, Town), names_to = "Season", values_to = "Count", values_drop_na = T)
+
+# join percents to main df by Season
+fulldf <- countytbl_long %>% full_join(PercentSeason, by = "Season")
+
+## Assume have 1/3 of total from riffle season 
+fulldf <- fulldf %>% 
+  mutate(Count = case_when(Season == "Regular" ~ Count*1/3, Season != "Regular" ~ Count))
+
+set.seed(123)
+fulldf <- fulldf %>%
+  add_column(AdultBuckCount = NA, AdultDoeCount = NA, MaleFawnCount = NA, FemaleFawnCount = NA)
+for(i in 1:nrow(fulldf)){
+  fulldf[i, 9:12] <- t(rmultinom(1, as.numeric(fulldf[i,4]) , prob = fulldf[i,5:8]))
+}
+```
+
+
+We use values from the Vermont 2022 Deer Harvest report to estimate counts of harvested individuals in different strata (adult male, adult female, yearling male, and yearling female), harvested in Vermont’s 14 counties, across different harvest seasons (archery, youth, novice, October muzzle, regular, and December muzzle). We use an multinomial with probability informed by percentage breakdowns in the deer harvest report to estimate the count of each strata in a county by season. Vermont only collects samples from check stations from the first weekend of the regular season and from the youth hunt. We estimate that checked individuals from the regular season were only 1/3 of the total harvest. Our dataset only includes individuals harvest in the youth hunt and one-third of individuals harvested in the regular season. 
+<br>
+
+With this data, we aim to calculate the number of samples we need to detect the disease at a certain level (prevalence) with a a set amount of statistical assurance (alpha). Prevalence refers to the amount of disease that can be detected; at some set level, if the disease is not detected, then the population is said to be free from the disease. Alpha is the level of confidence (not to be confused with credible bounds) we have that we have that the prevalence that we have calculated is less than the set threshold level. 
+
+
+
+
+```{r genDFs, include= FALSE}
+## From this, create 2 different data sets: (aggregated at county level but could do other boundaries)
+# 1) All harvested indiviudals
+# 2) All sampled inidividuals (just youth and open riffle (which is regular here??))
+
+
+## Cost points for each sample
+# low - Indiana - 16/sample
+# High own lab - MI - 189/sample
+# High no lab - Ohio - 200/sample
+
+Indiv_county_ALL <- fulldf %>% 
+  group_by(County) %>% 
+  summarise(AdultBuckCount = sum(AdultBuckCount), 
+            AdultDoeCount = sum(AdultDoeCount),
+            MaleFawnCount = sum(MaleFawnCount),
+            FemaleFawnCount = sum(FemaleFawnCount)) %>% 
+  rowwise() %>%
+  mutate(ContyTotal = sum(AdultBuckCount, AdultDoeCount, MaleFawnCount, FemaleFawnCount)) %>% 
+  mutate(Indiana = 16) %>% 
+  mutate(Michigan = 189) %>% 
+  mutate(Ohio = 200)
+
+Indiv_county_CheckStations <- fulldf %>% 
+  filter(Season == "Youth" | Season == "Regular") %>% 
+  group_by(County) %>% 
+  summarise(AdultBuckCount = sum(AdultBuckCount), 
+            AdultDoeCount = sum(AdultDoeCount),
+            MaleFawnCount = sum(MaleFawnCount),
+            FemaleFawnCount = sum(FemaleFawnCount)) %>% 
+  rowwise() %>%
+  mutate(ContyTotal = sum(AdultBuckCount, AdultDoeCount, MaleFawnCount, FemaleFawnCount)) %>% 
+  mutate(Indiana = 16) %>% 
+  mutate(Michigan = 189) %>% 
+  mutate(Ohio = 200)
+```
+
+<br>
+```{r statewide table, echo=FALSE}
+State_ALL <- sum(Indiv_county_ALL$ContyTotal)
+State_CheckStations <- sum(Indiv_county_CheckStations$ContyTotal)
+
+SRSno.sampleCalcfunc <- function(prevalence = .01, confidence = .99){
+  log(-(confidence - 1))/(log(1 - prevalence))
+}
+
+### Create vectors of alpha and prevalence 
+vecalpha <- c(.01, .05, .1)
+vecprev <- c(.001, .01, .1)
+
+All_NoSampSRS <- data.frame()
+setcounter <- 1
+for(i in vecalpha){
+  for(j in vecprev){
+    HoldNo <- SRSno.sampleCalcfunc(prevalence = j, confidence = 1 - i)
+    IDCharString <- paste0("Alpha_", i, "_", "Prevalence_", j)
+    ## Create counter that depends on i & j
+    setcounter
+    All_NoSampSRS[setcounter, 1] <- IDCharString
+    All_NoSampSRS[setcounter, 2] <- HoldNo
+    setcounter <- setcounter + 1
+  }
+}
+
+colnames(All_NoSampSRS) <- c("Surveillance Design", "No. Samples Needed")
+All_NoSampSRS$'No. Samples from Check Stations' <- rep(State_CheckStations, nrow(All_NoSampSRS))
+All_NoSampSRS$'No. Samples from All Harvest' <- rep(State_ALL, nrow(All_NoSampSRS))
+```
+
+```{r, echo = F, fig.cap="Figure 1. TITLE HERE"}
+All_NoSampSRS_grph_setup <- All_NoSampSRS %>%
+  separate_wider_delim(cols = `Surveillance Design`, delim = "_", names = c("alpha_label", "Alpha", "prev_label", "Prevalence"))
+All_NoSampSRS_grph_setup$Prevalence <- as.numeric(All_NoSampSRS_grph_setup$Prevalence)
+
+#ggplot(All_NoSampSRS_grph_setup) + 
+#  geom_point(aes(x = Prevalence, y = `No. Samples Needed`, color = Alpha))
+
+
+
+ggplot(All_NoSampSRS_grph_setup) + 
+  geom_point(aes(x = Prevalence, y = `No. Samples Needed`, color = Alpha)) + 
+  scale_y_continuous(
+    sec.axis = sec_axis(~ . * 189, name = "Cost (Michigan - 189$/sample)\n") #\n adds line break or space
+  )
+
+```
+Under a simplified random sampling approach, the confidence we set to detect different amounts of disease or the prevalence level heavily influences the number of samples need as well as the subsequent cost. 
+
+But this is at the state level. When we allocate the number of samples we need to each county based on the proportion of harvest. We can see that we can get the sample size we need for all counties except under one sample design scenario where we are trying to detect a very small amount of the disease with high confidence (alpha of .01 and prevalence of .001)
+
+```{r, echo=FALSE}
+SRS_for_dfs_func <- function(Indiv_county_ALL){
+Indiv_county_ALL_SRS <- Indiv_county_ALL %>% 
+  ## Add prevalence and alphas testing for
+  mutate(Prevalence_001 = .001) %>% 
+  mutate(Prevalence_01 = .01) %>% 
+  mutate(Prevalence_1 = .1) %>% 
+  mutate(Alpha_01 = .01) %>% 
+  mutate(Alpha_05 = .05) %>% 
+  mutate(Alpha_1 = .1) %>% 
+    #Figure out proportional harvest per country 
+  mutate(prop = ContyTotal/(sum(Indiv_county_ALL$ContyTotal))) %>% 
+  pivot_longer(cols = c("Alpha_01", "Alpha_05", "Alpha_1"), 
+               names_to = "Alpha", values_to = "Alpha_level") %>% 
+  pivot_longer(cols = c("Prevalence_001", "Prevalence_01", "Prevalence_1"), 
+               names_to = "Prevalence", values_to = "Prevalence_level") %>% 
+  ### Now calc number of samples needed 
+  mutate(NoSamples = log(-((1-Alpha_level) - 1))/(log(1 - Prevalence_level))) %>% 
+  mutate(NoSamplesperCounty = NoSamples*prop) %>% #mult by proportion of harvest
+  ## Now calculate costs
+  mutate(Cost_Indiana = NoSamplesperCounty *Indiana) %>% 
+  mutate(Cost_Michigan = NoSamplesperCounty *Michigan) %>% 
+  mutate(Cost_Ohio = NoSamplesperCounty *Ohio) %>% 
+  ## Do we have enough samples in the county (Y/N)
+  mutate(TargetMeet = if_else((NoSamplesperCounty - ContyTotal)  > 0, "False", "True"))
+}
+
+Indiv_county_CheckStations_SRS <- SRS_for_dfs_func(Indiv_county_CheckStations)
+
+ggplot(Indiv_county_CheckStations_SRS) + 
+  geom_point(aes(x = Prevalence_level, y = NoSamplesperCounty, color = TargetMeet, shape = Alpha))+
+  facet_wrap(~County) + 
+   labs(x = "Prevalence", y = "No. Samples per County")
+```
+
+
+Another surveillance approach is weighted surveillance. The probability of an individual testing positive for CWD are determined by different factors such as sex and ages, as well as the type of harvest or mortality (e.g., riffle hunter harvested or roadkill). Weighted surveillance makes use of this by allocating points based on the likelihood of an individual carrying the disease. For example, adult bucks are more likely to have CWD and so they have a higher point value than yearling does. For a given prevalence and level of confidence, one can calculate the total number of points needed. There is an assumption here that the true relative prevalence among age-sex lasses is the same as what is embedded in the point system. The resulting surveillance program can require less samples than a stratified random sample when high risk individuals are targeted. The points for unique sex-age-harvest levels (also refereed to as strata) were calculated based on deer data in Wisconsin `r citep("10.1111/1365-2664.13178")`. Sample weights have not been calculated for any state in the eastern US and so we use a modified version of this as seen in [Georgia's risk-weighted surveillance plan.](https://georgiawildlife.com/sites/default/files/GA_CWD_Surveillance_Plan%204-4-22_final.pdf)
+
+When we compare the number of samples needed under a weighted surveillance approach and stratified random sampling approach, we see that the weighted approach requires about 1/3 of the number of samples. 
+
+```{r weighted state, echo=FALSE, warning=FALSE, message=FALSE}
+Indiv_county_ALL_wgt <- Indiv_county_ALL %>% 
+  group_by(Ohio, Indiana, Michigan) %>% 
+  summarise(AdultBuckCount = sum(AdultBuckCount), 
+            AdultDoeCount = sum(AdultDoeCount),
+            MaleFawnCount = sum(MaleFawnCount),
+            FemaleFawnCount = sum(FemaleFawnCount))
+
+Indiv_county_CheckStations_wgt <- Indiv_county_CheckStations %>% 
+  group_by(Ohio, Indiana, Michigan) %>% ## This is stupid, but summarise wasn't working and can keep costs
+  summarise(AdultBuckCount = sum(AdultBuckCount), 
+            AdultDoeCount = sum(AdultDoeCount),
+            MaleFawnCount = sum(MaleFawnCount),
+            FemaleFawnCount = sum(FemaleFawnCount)) 
+
+### Modified version of same function used for counties... 
+
+## Function to calculate the number of points given
+Target_points_func <- function(testsensitivity = 1, designprevalence, alpha){
+  totalPoints <- (-log(alpha))/(testsensitivity*designprevalence)
+  return(totalPoints)
+}
+
+TargetPoints <- Target_points_func(designprevalence = .01, alpha = .01) 
+
+cost_success_func <- function(df = Indiv_county_ALL_wgt, TargetPoints,
+                              designprevalence = setprev, alpha = setalpha){
+checkme <-  df %>% mutate(AM_points = AdultBuckCount * 3,
+                AF_points = AdultDoeCount *1.5,
+                YM_points = MaleFawnCount * 1, 
+                YF_points = FemaleFawnCount*1) %>% 
+  mutate(AvgNoPoints = TargetPoints) %>% 
+    rowwise() %>% 
+    mutate(totalPoints = sum(across(c(AM_points, AF_points, YM_points, YF_points)))) %>% 
+    mutate(diffPoint = AvgNoPoints - totalPoints) %>% 
+    mutate(TargetMeet = if_else(diffPoint > 0, "False", "True")) 
+
+##okay so if we have enough points, prioritize the males for sampling (more cost efficient)
+
+for(i in 1:nrow(checkme)){
+
+  if(checkme$TargetMeet[i] == "True"){
+    # Select all individuals in AdultMale group * point value and see if that meets target, 
+    #record no individuals in new column 
+    # if point value is exceeded, remove as many samples as needed until reach rounded point 
+    
+    ## Iteratively add aduilt bucks
+    for(j in 1:max(checkme$AdultBuckCount[i])){
+      bucktemp <- j*3
+      if(bucktemp == checkme$AvgNoPoints[i]){
+        checkme[i,16] <- j
+        break
+      } else if(bucktemp > checkme$AvgNoPoints[i]){
+        checkme[i,16] <- j- 1
+        break
+      } else { # If don't hit cap
+        checkme[i,16] <- j
+      }
+      
+    }
+    
+    
+    ## Iteratively add adult does 
+    for(j in 1:max(checkme$AdultDoeCount[i])){
+      doetemp <- j*1.5
+      holdpoints <- checkme[i,16]*3 + doetemp ## FIX THIS
+      if(holdpoints == checkme$AvgNoPoints[i]){
+        checkme[i,17] <- j
+        break
+      } else if(holdpoints > checkme$AvgNoPoints[i]){
+        checkme[i,17] <- j - 1
+        break
+      }
+    }
+    
+    ## Iteratively add yearlings males 
+    for(j in 1:max(checkme$MaleFawnCount[i])){
+      YearMtemp <- j*1
+      holdpoints <- checkme[i,16]*3 + checkme[i,17]*1.5 + YearMtemp
+      if(holdpoints == checkme$AvgNoPoints[i]){
+        checkme[i,18] <- j
+        break
+      } else if(holdpoints > checkme$AvgNoPoints[i]){
+
+        checkme[i,18] <- j - 1  ## If only have one J and holdpoints isn't big enough, it gets stuck
+        break 
+      } else {
+        checkme[i,18] <- j
+      }
+    }
+    
+    ## Iteratively add yearlings females 
+    for(j in 1:max(checkme$FemaleFawnCount[i])){
+      YearFtemp <- j*1
+      holdpoints <- checkme[i,16]*3 + checkme[i,17]*1.5 + checkme[i,18]*1 + YearFtemp
+      if(holdpoints == checkme$AvgNoPoints[i]){
+        checkme[i,19] <- j
+      } else if(holdpoints > checkme$AvgNoPoints[i]){
+          checkme[i,19] <- j - 1
+          break
+      
+      }
+    }
+
+      
+    
+    ## Get total number of samples 
+    checkme[i,20] <- checkme[i,16] + checkme[i,17] + checkme[i,18] + checkme[i,19]
+  } #close if targetmeet == True loop 
+  # So if don't have enough points to meet target, ID how many have what is needed
+  else{ ## If maxing out number of samples, record 0 
+    ## Note, this is currently not an issue but if it was, 
+      #could find the difference between the max number of samples needed
+        # and number of samples in hand
+   # max(checkme[,22], na.rm = T)
+    
+    checkme[i,19] <- checkme[i,18] <- checkme[i,17] <- checkme[i,16] <- 0
+    checkme[i,20] <- checkme[i,16] + checkme[i,17] + checkme[i,18] + checkme[i,19]
+  }
+  
+} # close row for loop
+
+### Need extra rows calculated to compare across simulations later 
+# First rename newey added columns 
+colnames(checkme)[16] <- "Samp_Adult_Buck"; colnames(checkme)[17] <- "Samp_Adult_Doe" 
+colnames(checkme)[18] <- "Samp_Young_Buck" ; colnames(checkme)[19] <- "Samp_Young_Doe"
+colnames(checkme)[20] <- "Total_Samples_allStrata"
+
+checkme2 <- checkme %>% 
+  mutate(Prevalence = designprevalence) %>% 
+  mutate(Alpha = alpha) %>% 
+  ## Now calculate costs
+  mutate(Cost_Indiana = Total_Samples_allStrata *Indiana) %>% 
+  mutate(Cost_Michigan = Total_Samples_allStrata *Michigan) %>% 
+  mutate(Cost_Ohio = Total_Samples_allStrata *Ohio)
+  
+
+return(checkme2)
+
+} # close function
+
+
+### Set up simulations
+EstSampfunc <- function(setprev = .01, setalpha = .01, setdf = Indiv_county_CheckStations){
+  TargetPoints <- Target_points_func(designprevalence = setprev, alpha = setalpha) 
+  tempdf <- cost_success_func(df = setdf, TargetPoints, designprevalence = setprev, alpha = setalpha)
+  return(sum(tempdf[,20]))
+}
+
+vecalpha <- c(.01, .05, .1)
+vecprev <- c(.001, .01, .1)
+
+checkstations_NoSampWeight <- data.frame()
+setcounter <- 1
+  for(i in vecalpha){
+    for(j in vecprev){
+      HoldNo <- EstSampfunc(setprev = j, setalpha = i, setdf = Indiv_county_CheckStations_wgt)
+      IDCharString <- paste0("Est", "_", "alpha", i, "prev", j)
+      ## Create counter that depends on i & j
+      setcounter
+      checkstations_NoSampWeight[setcounter, 1] <- IDCharString
+      checkstations_NoSampWeight[setcounter, 2] <- HoldNo
+      setcounter <- setcounter + 1
+    }
+  }
+
+
+allharvest_NoSampWeight <- data.frame()
+setcounter <- 1
+  for(i in vecalpha){
+    for(j in vecprev){
+      HoldNo <- EstSampfunc(setprev = j, setalpha = i, setdf = Indiv_county_ALL_wgt)
+      IDCharString <- paste0("Est", "_", "alpha", i, "prev", j)
+      ## Create counter that depends on i & j
+      setcounter
+      allharvest_NoSampWeight[setcounter, 1] <- IDCharString
+      allharvest_NoSampWeight[setcounter, 2] <- HoldNo
+      setcounter <- setcounter + 1
+    }
+  }
+
+
+## Put both approaches together (note - exact same number of samples needed for each)
+# In other words, we don't run out of males to sample
+
+colnames(checkstations_NoSampWeight) <- c("Surveillance Design", "No. Samples Needed Under Weighted Surveillance")
+samples_weighted_comp_SRS <- checkstations_NoSampWeight
+samples_weighted_comp_SRS$'No. Samples Needed Under SRS' <- All_NoSampSRS[,2]
+
+
+
+kable(samples_weighted_comp_SRS,
+      caption = "Table XX. Number of Samples Needed under a Statewide Wide Weighted Sampling Design Compared to the SRS Approach",
+      align = "lrr") %>% 
+  kable_styling(bootstrap_options = "striped")
+
+```
+
+**Is their a risk of anchoring here?**
+
+
+Graph to add: state wide prevalence (x) vs county level prevalence (y) 
+*Still not sure about this graph so not including it for now*

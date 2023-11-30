@@ -140,6 +140,27 @@ kable(All_NoSampSRS,
 Except for the surveillance design collected at check stations with an alpha of .01 (99% confident), and prevalence of .001, we have access to enough samples to complete all other surveillance designs. 
 
 
+We also present Table 2 in graphical form with prevalence threshold on the x-axis, sample size on the y-axis 
+```{r, echo = F, fig.cap="Figure 1. Cost of Samples under SRS Approach"}
+All_NoSampSRS_grph_setup <- All_NoSampSRS %>%
+  separate_wider_delim(cols = `Surveillance Design`, delim = "_", names = c("alpha_label", "Alpha", "prev_label", "Prevalence"))
+All_NoSampSRS_grph_setup$Prevalence <- as.numeric(All_NoSampSRS_grph_setup$Prevalence)
+
+#ggplot(All_NoSampSRS_grph_setup) + 
+#  geom_point(aes(x = Prevalence, y = `No. Samples Needed`, color = Alpha))
+
+
+
+ggplot(All_NoSampSRS_grph_setup) + 
+  geom_point(aes(x = Prevalence, y = `No. Samples Needed`, color = Alpha)) + 
+  scale_y_continuous(
+    sec.axis = sec_axis(~ . * 189, name = "Cost (Michigan - 189$/sample)\n") #\n adds line break or space
+  )
+
+```
+
+
+
 
 Using cost estimates from three midwestern states, we can estimate the cost for each surveillance design. Ohio has an intensive monitoring program set up to identify 2% prevalence with 95% confidence. The state does not have a state lab and the average cost is \$200/sample. Michigan has an in state lab set up to process samples which makes the average cost per sample (\$189) slightly cheaper, although the initial step up costs are not included. Indiana collects a handful of samples with a program set up in collaboration with taxidermists in the state. Their monitoring program is set up to identify 10% prevalence with 80% confidence. The average cost per sample is \$16. 
 <br>
@@ -161,9 +182,27 @@ kable(All_NoSampSRS_cost_tbl,
   kable_styling(bootstrap_options = "striped")
 ```
 
+
+The comparison between different costs per samples can be visualized as follows. 
+```{r , echo=FALSE}
+## edit df to compare costs on one graph
+Indiv_county_CheckStations_SRS_long <- All_NoSampSRS_cost_tbl %>% 
+  pivot_longer(cols = c("Cost Ohio", "Cost Michigan", "Cost Indiana"), 
+               names_to = "State Cost", values_to = "Cost") %>% 
+    separate_wider_delim(cols = `Surveillance Design`, delim = "_", names = c("alpha_label", "Alpha", "prev_label", "Prevalence"))
+ggplot(Indiv_county_CheckStations_SRS_long) + 
+  geom_point(aes(x = as.numeric(Prevalence), y = Cost, shape = factor(`State Cost`), color = Alpha)) + 
+  labs(x = "Prevalence", shape = "State Cost")
+
+```
+
+
+
+
+
 #### Weighted Sampling
 
-Another approach to surveillance is weighted surveillance. The probability of an individual testing positive for CWD are determined by different factors such as sex and ages, as well as the type of harvest or mortality (e.g., riffle hunter harvested or roadkill). Weighted surveillance makes use of this by allocating points based on the likelihood of an individual carrying the disease. For example, adult bucks are more likely to have CWD and so they have a higher point value than yearling does. For a given prevalence and level of confidence, one can calculate the total number of points needed. The resulting surveillance program can require less samples than a stratified random sample when high risk individuals are targeted. The points for unique sex-age-harvest levels (also refereed to as strata) were calculated based on deer data in Wisconsin `r citep("10.1111/1365-2664.13178")`. Sample weights have not been calculated for any state in the eastern US and so we use a modified version of this as seen in [Georgia's risk-weighted surveillance plan.](https://georgiawildlife.com/sites/default/files/GA_CWD_Surveillance_Plan%204-4-22_final.pdf)
+Another approach to surveillance is weighted surveillance. The probability of an individual testing positive for CWD are determined by different factors such as sex and ages, as well as the type of harvest or mortality (e.g., riffle hunter harvested or roadkill). Weighted surveillance makes use of this by allocating points based on the likelihood of an individual carrying the disease. For example, adult bucks are more likely to have CWD and so they have a higher point value than yearling does. For a given prevalence and level of confidence, one can calculate the total number of points needed. There is an assumption here that the true relative prevalence among age-sex lasses is the same as what is embedded in the point system. The resulting surveillance program can require less samples than a stratified random sample when high risk individuals are targeted. The points for unique sex-age-harvest levels (also refereed to as strata) were calculated based on deer data in Wisconsin `r citep("10.1111/1365-2664.13178")`. Sample weights have not been calculated for any state in the eastern US and so we use a modified version of this as seen in [Georgia's risk-weighted surveillance plan.](https://georgiawildlife.com/sites/default/files/GA_CWD_Surveillance_Plan%204-4-22_final.pdf)
 
 ```{r copied table, echo=FALSE}
 Sample <- c("Adult Male (>= 2.5 yrs)", "Adult Female (>= 2.5 yrs)", "Yearling Male (1.5 to < 2.5 yrs)", "Yearling Female (1.5 to < 2.5 yrs)" )
@@ -411,7 +450,7 @@ kable(All_NoSampWeight_cost_tbl,
 While the previous calculations were set up to be state wide, we didn't identify where in the state the samples would come from. The following repeats the same comparisons (stratified random sampling and weighted surveillance) using the same two datasets (all harvest and individuals that come through check stations) but now includes the geographic boundaries of harvest. We use county boundaries but can easily repeat the following process with wildlife management units. When calculating the number of samples that should come from each geographic region, we identify the total number of samples that are needed under a given sampling design and then allocate the total number of samples needed from a geographic region using the proportional amount of harvest that comes from each count. Alternatively, equal distribution across all samples could be used.
 
 #### Stratified Random Sampling
-```{r, echo=FALSE}
+```{r, echo=F}
 
 SRS_for_dfs_func <- function(Indiv_county_ALL){
 Indiv_county_ALL_SRS <- Indiv_county_ALL %>% 
@@ -460,18 +499,57 @@ Indiv_county_ALL_SRS <- SRS_for_dfs_func(Indiv_county_ALL)
 
 ```
 
+
 ```{r, echo=FALSE}
-Indiv_county_CheckStations_SRS$MissingAll <- Indiv_county_ALL_SRS$CountyMissingCounties
+Indiv_county_CheckStations_SRS$MissingAll <- Indiv_county_CheckStations_SRS$CountyMissingCounties
 
 colnames(Indiv_county_CheckStations_SRS) <- c("Surveillance Design", "No. Samples", "Cost Indiana", "Cost Ohio", "Cost Michigan", "Counties Missing Samples Check Station Dataset", "Counties Missing Samples Total Harvest Dataset" ) 
 
 
 kable(Indiv_county_CheckStations_SRS,
-      caption = "Table 7. Estimate of Cost under a Statewide Stratified Random Sampling Design at the County Level",
+      caption = "Table 7. Estimate of Cost under a Statewide Stratified Random Sampling Design at the County Level for Samples Collected at Checkpoints",
       align = "lrrrrrr") %>% 
   kable_styling(bootstrap_options = "striped")
 ```
-Similarly to the statewide stratified random sampling, the surveillance design with an alpha of .01 (99% confident), and prevalence of .001 can not be completed with the current number of samples collected at check stations. 
+Similarly to the statewide stratified random sampling, the surveillance design with an alpha of .01 (99% confident), and prevalence of .001 can not be completed with the current number of samples collected at check stations. When all samples are gathered, all counties  are available to meet the set target. 
+
+We can visualize when certain counties are missing more data points than others, although here there is only one design prevalence missing.
+```{r, echo=FALSE}
+SRS_for_dfs_func <- function(Indiv_county_ALL){
+Indiv_county_ALL_SRS <- Indiv_county_ALL %>% 
+  ## Add prevalence and alphas testing for
+  mutate(Prevalence_001 = .001) %>% 
+  mutate(Prevalence_01 = .01) %>% 
+  mutate(Prevalence_1 = .1) %>% 
+  mutate(Alpha_01 = .01) %>% 
+  mutate(Alpha_05 = .05) %>% 
+  mutate(Alpha_1 = .1) %>% 
+    #Figure out proportional harvest per country 
+  mutate(prop = ContyTotal/(sum(Indiv_county_ALL$ContyTotal))) %>% 
+  pivot_longer(cols = c("Alpha_01", "Alpha_05", "Alpha_1"), 
+               names_to = "Alpha", values_to = "Alpha_level") %>% 
+  pivot_longer(cols = c("Prevalence_001", "Prevalence_01", "Prevalence_1"), 
+               names_to = "Prevalence", values_to = "Prevalence_level") %>% 
+  ### Now calc number of samples needed 
+  mutate(NoSamples = log(-((1-Alpha_level) - 1))/(log(1 - Prevalence_level))) %>% 
+  mutate(NoSamplesperCounty = NoSamples*prop) %>% #mult by proportion of harvest
+  ## Now calculate costs
+  mutate(Cost_Indiana = NoSamplesperCounty *Indiana) %>% 
+  mutate(Cost_Michigan = NoSamplesperCounty *Michigan) %>% 
+  mutate(Cost_Ohio = NoSamplesperCounty *Ohio) %>% 
+  ## Do we have enough samples in the county (Y/N)
+  mutate(TargetMeet = if_else((NoSamplesperCounty - ContyTotal)  > 0, "False", "True"))
+}
+
+Indiv_county_CheckStations_SRS <- SRS_for_dfs_func(Indiv_county_CheckStations)
+
+ggplot(Indiv_county_CheckStations_SRS) + 
+  geom_point(aes(x = factor(Prevalence_level), y = NoSamplesperCounty, color = TargetMeet, shape = Alpha))+
+  facet_wrap(~County) + 
+   labs(x = "Prevalence", y = "No. Samples per County")
+```
+
+
 
 
 
@@ -651,12 +729,13 @@ kable(SamplesforWeighted,
 
 ```
 
-
-**Do we care about cost here??** 
+We can see that there are a few differences in the number of samples needed between the check station dataset and the dataset formed with all harvest across surveillance designs 
 
 
 ### Estimating Prevalence from the Available Samples
-```{r}
+
+For each county, we can take the total number of samples that are available and calculate the total prevalence that could be detected in that county if we were to use all available samples. 
+```{r, echo=FALSE}
 Prev_Indiv_county_CheckStations <- Indiv_county_CheckStations %>% 
   mutate(Alpha_01 = .01) %>% 
   mutate(Alpha_05 = .05) %>% 
@@ -666,21 +745,71 @@ Prev_Indiv_county_CheckStations <- Indiv_county_CheckStations %>%
   ### Now calc prev from number of samples 
   # extra step to make sure not too wonky 
   mutate(confidencecalc = 1 - Alpha_level) %>% 
-  mutate(EstPrev = exp(log(-(confidencecalc - 1))/ContyTotal) )
+  mutate(EstPrev = 1 - (Alpha_level)^(1/ContyTotal) )
 
-### How are prevalence values so high? Is this right? 
+### How are prevalence values still so high? 
 
 ## Set up table
 Prev_Indiv_county_CheckStations_tbl <- Prev_Indiv_county_CheckStations %>% 
   select(County, ContyTotal, confidencecalc, EstPrev )
 
-colnames(Prev_Indiv_county_CheckStations_tbl) <- c("County", "No. Samples", "Confidence Level", "Prevalence")
+#colnames(Prev_Indiv_county_CheckStations_tbl) <- c("County", "No. Samples", "Confidence Level", "Prevalence")
 
-kable(Prev_Indiv_county_CheckStations_tbl,
-      caption = "Table 9. Total Prevalence that for a Set Level of Alpha Given the Total Number of Samples in a County for the Check Stations Dataset",
-      align = "lrrr") %>% 
-  kable_styling(bootstrap_options = "striped")
+#kable(Prev_Indiv_county_CheckStations_tbl,
+#      caption = "Table 9. Total Prevalence that for a Set Level of Alpha Given the Total Number of Samples #in a County for the Check Stations Dataset",
+#      align = "lrrr") %>% 
+#  kable_styling(bootstrap_options = "striped")
+
+ggplot(Prev_Indiv_county_CheckStations_tbl) + 
+  geom_point(aes(x = EstPrev, y = factor(County), color = factor(confidencecalc))) + 
+  labs(x = "County Level Prevalence", y = "County", color = "Confidence Level")
+
 ```
+
+
+
+<br>
+We can apply the same logic to identify how many samples should be taken from each county for a given prevalence and alpha, and then identify the prevalence level of each county.
+<br>
+```{r, echo=FALSE}
+Indiv_county_CheckStations_SRS_backcalc <- Indiv_county_CheckStations_SRS %>% 
+  ### Now calc prev from number of samples 
+  # extra step to make sure not too wonky 
+  mutate(confidencecalc = 1 - Alpha_level) %>% 
+  mutate(EstPrev = 1 - (Alpha_level)^(1/NoSamplesperCounty) ) %>% 
+  # Remove ones where target is not meet 
+  filter(TargetMeet == "True")
+
+
+ggplot(Indiv_county_CheckStations_SRS_backcalc) + 
+  geom_point(aes(x = factor(Prevalence_level), y = EstPrev) ) + 
+  facet_wrap(~County) + 
+   labs(x = "Statewide Prevalence", y = "County level Prevalence")
+```
+<br>
+*Note, value is the same regardless of alpha value and as scrap work below indicates*
+
+
+
+scrap work
+```{r}
+
+prop <- c(.7, .2, .1)
+Setpre <- c(.01, .1)
+setalpha <- c(.1, .05)
+#NoSamples = log(-((1-Alpha_level) - 1))/(log(1 - Prevalence_level))
+NoSamples.1 = log(-((1-.1) - 1))/(log(1 - .01))
+count1a <- NoSamples.1*.7
+NoSamples.05 = log(-((1-.05) - 1))/(log(1 - .01))
+count1b <- NoSamples.05*.7
+
+#EstPrev = 1 - (Alpha_level)^(1/NoSamplesperCounty)
+EstPreva = 1 - (.1)^(1/count1a)
+
+EstPrevb = 1 - (.05)^(1/count1b)
+```
+
+
 
 
 

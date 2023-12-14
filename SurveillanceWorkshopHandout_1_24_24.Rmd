@@ -1,8 +1,6 @@
 ---
-title: "Survallience Handout Workshop"
-output:
-  html_document: default
-  pdf_document: default
+title: "Surveillance Handout Workshop"
+output: word_document
 date: "2024-1-24"
 ---
 
@@ -16,6 +14,7 @@ library(tidyverse)
 library(readxl)
 library(knitcitations)
 library(kableExtra) ## devtools::install_github("kupietz/kableExtra") #some issue needed patching
+library(flextable) #kable doesn't knit to word
 
 ### ### Read in data
 countytbl <- read_excel("Tablesfrom2022DeerHarvestReport.xlsx", sheet = "Table012")
@@ -42,13 +41,10 @@ for(i in 1:nrow(fulldf)){
 }
 ```
 
-
-We use values from the Vermont 2022 Deer Harvest report to estimate counts of harvested individuals in different strata (adult male, adult female, yearling male, and yearling female), harvested in Vermont’s 14 counties, across different harvest seasons (archery, youth, novice, October muzzle, regular, and December muzzle). We use an multinomial with probability informed by percentage breakdowns in the deer harvest report to estimate the count of each strata in a county by season. Vermont only collects samples from check stations from the first weekend of the regular season and from the youth hunt. We estimate that checked individuals from the regular season were only 1/3 of the total harvest. Our dataset only includes individuals harvest in the youth hunt and one-third of individuals harvested in the regular season. 
-<br>
-
-With this data, we aim to calculate the number of samples we need to detect the disease at a certain level (prevalence) with a a set amount of statistical assurance (alpha). Prevalence refers to the amount of disease that can be detected; at some set level, if the disease is not detected, then the population is said to be free from the disease. Alpha is the level of confidence (not to be confused with credible bounds) we have that we have that the prevalence that we have calculated is less than the set threshold level. 
+### The Relationship between prevalence, confidence, and number of samples
 
 
+The graph below shows the number of samples required to have a 90%, 95%, or 99% confidence (see colored lines) in detecting at least one case of chronic wasting disease, under various assumed prevalences (x-axis). Prevalence refers to the proportion of the diseased population.
 
 
 ```{r genDFs, include= FALSE}
@@ -98,8 +94,10 @@ SRSno.sampleCalcfunc <- function(prevalence = .01, confidence = .99){
 }
 
 ### Create vectors of alpha and prevalence 
-vecalpha <- c(.01, .05, .1)
-vecprev <- c(.001, .01, .1)
+#vecalpha <- c(seq(.01, .1, by = .001)) # Change this to select 4 values of alpha that we care about
+vecalpha <- c(.01, .05, .1, .2) #99, 95, 90, 80
+#vecprev <- c(.001, .01, .1)
+vecprev <- c(seq(.01, .1, by = .0001))
 
 All_NoSampSRS <- data.frame()
 setcounter <- 1
@@ -120,43 +118,109 @@ All_NoSampSRS$'No. Samples from Check Stations' <- rep(State_CheckStations, nrow
 All_NoSampSRS$'No. Samples from All Harvest' <- rep(State_ALL, nrow(All_NoSampSRS))
 ```
 
-```{r, echo = F, fig.cap="Figure 1. TITLE HERE"}
+```{r, fig.cap="Figure 1. No. Samples Needed under Different Surveillance Designs", echo = F, message=FALSE, fig.width=10, fig.height=7}
 All_NoSampSRS_grph_setup <- All_NoSampSRS %>%
-  separate_wider_delim(cols = `Surveillance Design`, delim = "_", names = c("alpha_label", "Alpha", "prev_label", "Prevalence"))
+  separate_wider_delim(cols = `Surveillance Design`, delim = "_", names = c("alpha_label", "Alpha", "prev_label", "Prevalence")) %>% 
+  mutate(Confidence = 1- as.numeric(Alpha)) # Create Confidence
 All_NoSampSRS_grph_setup$Prevalence <- as.numeric(All_NoSampSRS_grph_setup$Prevalence)
 
 #ggplot(All_NoSampSRS_grph_setup) + 
 #  geom_point(aes(x = Prevalence, y = `No. Samples Needed`, color = Alpha))
 
 
+## add horizontal line for avg number of checked deer per strata 
+ABC <- sum(Indiv_county_CheckStations$AdultBuckCount)
+ADC <- sum(Indiv_county_CheckStations$AdultDoeCount)
+MFC <- sum(Indiv_county_CheckStations$MaleFawnCount)
+FFC <- sum(Indiv_county_CheckStations$FemaleFawnCount)
+
+#create data frame that contains horizontal line location
+cutoff <- data.frame(yintercept=ADC, Lines='Adult Doe Count')
+cutoff2 <- data.frame(yintercept=MFC, Lines='Male Fawn Count')
+cutoff3 <- data.frame(yintercept=FFC, Lines='Female Fawn Count')
+
 
 ggplot(All_NoSampSRS_grph_setup) + 
-  geom_point(aes(x = Prevalence, y = `No. Samples Needed`, color = Alpha)) + 
-  scale_y_continuous(
+  geom_point(aes(x = Prevalence, y = `No. Samples Needed`, color = as.factor(Confidence) ) ) +
+  scale_y_continuous(breaks=seq(0, 500,20), limits = c(0, 500) ,
     sec.axis = sec_axis(~ . * 189, name = "Cost (Michigan - 189$/sample)\n") #\n adds line break or space
-  )
+  ) + 
+  #scale_x_continuous(breaks=seq(0, 1, .01)) +
+  labs(color = "Confidence") + 
+  geom_hline(aes(yintercept=yintercept, linetype=Lines), cutoff, color = "blue") +
+  geom_hline(aes(yintercept=yintercept, linetype=Lines), cutoff2, color = "darkgreen") +
+  geom_hline(aes(yintercept=yintercept, linetype=Lines), cutoff3, color = "darkblue") + 
+  labs(caption = "Note: Adult Buck Count totals 2688 and is not included on the graph")  
+
+
 
 ```
-Under a simplified random sampling approach, the confidence we set to detect different amounts of disease or the prevalence level heavily influences the number of samples need as well as the subsequent cost. 
 
-But this is at the state level. When we allocate the number of samples we need to each county based on the proportion of harvest. We can see that we can get the sample size we need for all counties except under one sample design scenario where we are trying to detect a very small amount of the disease with high confidence (alpha of .01 and prevalence of .001)
 
-```{r, echo=FALSE}
+<br>
+<br>
+
+### Determine whether current harvest/check station activity allows Vermont to meet surveillance goals when samples are distributed at the county level
+
+*If we get data from Vermont:*
+We use data from the 2022 harvest for individuals sampled at biological check stations. Each individual is classified into a strata (adult male, adult female, yearling male, and yearling female), season (first weekend of regular or youth hunt), and classified into wildlife management unit (WMU).  
+
+*If we don't get data from Vermont and use simulated data:*
+We use values from the Vermont 2022 Deer Harvest report to estimate counts of individuals in strata (adult male, adult female, yearling male, and yearling female), harvested in Vermont’s 14 counties, across harvest seasons (archery, youth, novice, October muzzle, regular, and December muzzle). We use an multinomial with probability informed by percentage breakdowns in the deer harvest report to estimate the count of each strata in a county by season. Vermont only collects samples from check stations from the first weekend of the regular season and from the youth hunt. We estimate that checked individuals from the regular season were only 1/3 of the total harvest. Our dataset only includes individuals harvested in the youth hunt and one-third of individuals harvested in the regular season. 
+<br>
+
+With these data, we calculate the number of samples needed to detect CWD at a given prevalence and statistical assurance (alpha). Alpha is the confidence that population-level CWD prevalence is at or below the threshold level. 
+
+
+Under a simplified random sample (SRS), the confidence level heavily influences the number of samples needed and associated costs. 
+
+Here, we divide the total number of samples needed for specific combinations of confidence and prevalence proportionally by county and then identify whether the number of samples available at a county level is enough to meet the proportional allocation. The proportional number of samples needed per county is based on the proportion of harvest. We can get the sample size we need for all counties except under one sample design scenario where we are trying to detect a small amount of the disease with high confidence (alpha of .01 and prevalence of .001)
+*We no longer have a prevalence of .001 so there are no cases where we don't have enough samples. Keep?*
+
+```{r, echo=FALSE, message = F, warning = F, fig.cap="Figure 2. Number of Samples per County", fig.width=10, fig.height=11}
 SRS_for_dfs_func <- function(Indiv_county_ALL){
-Indiv_county_ALL_SRS <- Indiv_county_ALL %>% 
-  ## Add prevalence and alphas testing for
-  mutate(Prevalence_001 = .001) %>% 
-  mutate(Prevalence_01 = .01) %>% 
-  mutate(Prevalence_1 = .1) %>% 
-  mutate(Alpha_01 = .01) %>% 
-  mutate(Alpha_05 = .05) %>% 
-  mutate(Alpha_1 = .1) %>% 
-    #Figure out proportional harvest per country 
-  mutate(prop = ContyTotal/(sum(Indiv_county_ALL$ContyTotal))) %>% 
-  pivot_longer(cols = c("Alpha_01", "Alpha_05", "Alpha_1"), 
-               names_to = "Alpha", values_to = "Alpha_level") %>% 
-  pivot_longer(cols = c("Prevalence_001", "Prevalence_01", "Prevalence_1"), 
-               names_to = "Prevalence", values_to = "Prevalence_level") %>% 
+
+  Indiv_county_ALL_SRS <- Indiv_county_ALL %>% 
+      #Figure out proportional harvest per country 
+  mutate(prop = ContyTotal/(sum(Indiv_county_ALL$ContyTotal)))
+    
+  ### Create vectors of alpha and prevalence 
+vecalpha <- c(.01, .05, .1, .2) #99, 95, 90, 80
+vecprev <- c(seq(.01, .1, by = .0001))
+
+## Do alpha 
+Acolfunc <- function(df, n){
+      varname <- paste0("alpha.", n)
+      df %>%
+         mutate(!!varname := 1 * n) ### Fining a way to add row of the same value 
+}
+Indiv_county_ALL_alph <- Indiv_county_ALL_SRS
+for(i in vecalpha){
+    Indiv_county_ALL_alph <- Acolfunc(df = Indiv_county_ALL_alph, n = i)
+}
+Indiv_county_ALL_alph <- Indiv_county_ALL_alph %>% pivot_longer(cols = starts_with("alpha"),
+             names_to = "Alpha", values_to = "Alpha_level")
+             
+
+## Set up prev 
+Prevcolfunc <- function(df, n){
+      varname <- paste0("Prevalence", n)
+      df %>%
+         mutate(!!varname := 1 * n)
+}
+Indiv_county_ALL_Prev <- Indiv_county_ALL_SRS
+for(i in vecprev){
+    Indiv_county_ALL_Prev <- Prevcolfunc(df = Indiv_county_ALL_Prev, n = i)
+}
+Indiv_county_ALL_Prev <- Indiv_county_ALL_Prev %>% pivot_longer(cols = starts_with("Prevalence"),
+             names_to = "Prevalence", values_to = "Prevalence_level")
+
+LongAlph_Prev <- Indiv_county_ALL_Prev %>% full_join(Indiv_county_ALL_alph, 
+  by = c("County","AdultBuckCount","AdultDoeCount","MaleFawnCount","FemaleFawnCount",
+         "ContyTotal","Indiana","Michigan","Ohio", "prop"))
+
+
+Indiv_county_ALL_SRS <- LongAlph_Prev %>% 
   ### Now calc number of samples needed 
   mutate(NoSamples = log(-((1-Alpha_level) - 1))/(log(1 - Prevalence_level))) %>% 
   mutate(NoSamplesperCounty = NoSamples*prop) %>% #mult by proportion of harvest
@@ -170,217 +234,68 @@ Indiv_county_ALL_SRS <- Indiv_county_ALL %>%
 
 Indiv_county_CheckStations_SRS <- SRS_for_dfs_func(Indiv_county_CheckStations)
 
+#ggplot(Indiv_county_CheckStations_SRS) + 
+#  geom_point(aes(x = Prevalence_level, y = NoSamplesperCounty, color = TargetMeet))+
+#  facet_wrap(~County) + 
+#   labs(x = "Prevalence", y = "No. Samples per County") 
+
+## Old graph to see if could meet target, not informative when it's all true... 
+
+Indiv_county_CheckStations_SRS <- Indiv_county_CheckStations_SRS %>% 
+  mutate(county_prev = 1- (Alpha_level^(1/NoSamplesperCounty))) %>% 
+  mutate(Confidence_num = (1 - Alpha_level) *100) %>%  #create confidence label
+  mutate(Confidence = paste0(Confidence_num, "%", " confidence"))
+
 ggplot(Indiv_county_CheckStations_SRS) + 
-  geom_point(aes(x = Prevalence_level, y = NoSamplesperCounty, color = TargetMeet, shape = Alpha))+
-  facet_wrap(~County) + 
-   labs(x = "Prevalence", y = "No. Samples per County")
-```
-
-
-Another surveillance approach is weighted surveillance. The probability of an individual testing positive for CWD are determined by different factors such as sex and ages, as well as the type of harvest or mortality (e.g., riffle hunter harvested or roadkill). Weighted surveillance makes use of this by allocating points based on the likelihood of an individual carrying the disease. For example, adult bucks are more likely to have CWD and so they have a higher point value than yearling does. For a given prevalence and level of confidence, one can calculate the total number of points needed. There is an assumption here that the true relative prevalence among age-sex lasses is the same as what is embedded in the point system. The resulting surveillance program can require less samples than a stratified random sample when high risk individuals are targeted. The points for unique sex-age-harvest levels (also refereed to as strata) were calculated based on deer data in Wisconsin `r citep("10.1111/1365-2664.13178")`. Sample weights have not been calculated for any state in the eastern US and so we use a modified version of this as seen in [Georgia's risk-weighted surveillance plan.](https://georgiawildlife.com/sites/default/files/GA_CWD_Surveillance_Plan%204-4-22_final.pdf)
-
-When we compare the number of samples needed under a weighted surveillance approach and stratified random sampling approach, we see that the weighted approach requires about 1/3 of the number of samples. 
-
-```{r weighted state, echo=FALSE, warning=FALSE, message=FALSE}
-Indiv_county_ALL_wgt <- Indiv_county_ALL %>% 
-  group_by(Ohio, Indiana, Michigan) %>% 
-  summarise(AdultBuckCount = sum(AdultBuckCount), 
-            AdultDoeCount = sum(AdultDoeCount),
-            MaleFawnCount = sum(MaleFawnCount),
-            FemaleFawnCount = sum(FemaleFawnCount))
-
-Indiv_county_CheckStations_wgt <- Indiv_county_CheckStations %>% 
-  group_by(Ohio, Indiana, Michigan) %>% ## This is stupid, but summarise wasn't working and can keep costs
-  summarise(AdultBuckCount = sum(AdultBuckCount), 
-            AdultDoeCount = sum(AdultDoeCount),
-            MaleFawnCount = sum(MaleFawnCount),
-            FemaleFawnCount = sum(FemaleFawnCount)) 
-
-### Modified version of same function used for counties... 
-
-## Function to calculate the number of points given
-Target_points_func <- function(testsensitivity = 1, designprevalence, alpha){
-  totalPoints <- (-log(alpha))/(testsensitivity*designprevalence)
-  return(totalPoints)
-}
-
-TargetPoints <- Target_points_func(designprevalence = .01, alpha = .01) 
-
-cost_success_func <- function(df = Indiv_county_ALL_wgt, TargetPoints,
-                              designprevalence = setprev, alpha = setalpha){
-checkme <-  df %>% mutate(AM_points = AdultBuckCount * 3,
-                AF_points = AdultDoeCount *1.5,
-                YM_points = MaleFawnCount * 1, 
-                YF_points = FemaleFawnCount*1) %>% 
-  mutate(AvgNoPoints = TargetPoints) %>% 
-    rowwise() %>% 
-    mutate(totalPoints = sum(across(c(AM_points, AF_points, YM_points, YF_points)))) %>% 
-    mutate(diffPoint = AvgNoPoints - totalPoints) %>% 
-    mutate(TargetMeet = if_else(diffPoint > 0, "False", "True")) 
-
-##okay so if we have enough points, prioritize the males for sampling (more cost efficient)
-
-for(i in 1:nrow(checkme)){
-
-  if(checkme$TargetMeet[i] == "True"){
-    # Select all individuals in AdultMale group * point value and see if that meets target, 
-    #record no individuals in new column 
-    # if point value is exceeded, remove as many samples as needed until reach rounded point 
-    
-    ## Iteratively add aduilt bucks
-    for(j in 1:max(checkme$AdultBuckCount[i])){
-      bucktemp <- j*3
-      if(bucktemp == checkme$AvgNoPoints[i]){
-        checkme[i,16] <- j
-        break
-      } else if(bucktemp > checkme$AvgNoPoints[i]){
-        checkme[i,16] <- j- 1
-        break
-      } else { # If don't hit cap
-        checkme[i,16] <- j
-      }
-      
-    }
-    
-    
-    ## Iteratively add adult does 
-    for(j in 1:max(checkme$AdultDoeCount[i])){
-      doetemp <- j*1.5
-      holdpoints <- checkme[i,16]*3 + doetemp ## FIX THIS
-      if(holdpoints == checkme$AvgNoPoints[i]){
-        checkme[i,17] <- j
-        break
-      } else if(holdpoints > checkme$AvgNoPoints[i]){
-        checkme[i,17] <- j - 1
-        break
-      }
-    }
-    
-    ## Iteratively add yearlings males 
-    for(j in 1:max(checkme$MaleFawnCount[i])){
-      YearMtemp <- j*1
-      holdpoints <- checkme[i,16]*3 + checkme[i,17]*1.5 + YearMtemp
-      if(holdpoints == checkme$AvgNoPoints[i]){
-        checkme[i,18] <- j
-        break
-      } else if(holdpoints > checkme$AvgNoPoints[i]){
-
-        checkme[i,18] <- j - 1  ## If only have one J and holdpoints isn't big enough, it gets stuck
-        break 
-      } else {
-        checkme[i,18] <- j
-      }
-    }
-    
-    ## Iteratively add yearlings females 
-    for(j in 1:max(checkme$FemaleFawnCount[i])){
-      YearFtemp <- j*1
-      holdpoints <- checkme[i,16]*3 + checkme[i,17]*1.5 + checkme[i,18]*1 + YearFtemp
-      if(holdpoints == checkme$AvgNoPoints[i]){
-        checkme[i,19] <- j
-      } else if(holdpoints > checkme$AvgNoPoints[i]){
-          checkme[i,19] <- j - 1
-          break
-      
-      }
-    }
-
-      
-    
-    ## Get total number of samples 
-    checkme[i,20] <- checkme[i,16] + checkme[i,17] + checkme[i,18] + checkme[i,19]
-  } #close if targetmeet == True loop 
-  # So if don't have enough points to meet target, ID how many have what is needed
-  else{ ## If maxing out number of samples, record 0 
-    ## Note, this is currently not an issue but if it was, 
-      #could find the difference between the max number of samples needed
-        # and number of samples in hand
-   # max(checkme[,22], na.rm = T)
-    
-    checkme[i,19] <- checkme[i,18] <- checkme[i,17] <- checkme[i,16] <- 0
-    checkme[i,20] <- checkme[i,16] + checkme[i,17] + checkme[i,18] + checkme[i,19]
-  }
-  
-} # close row for loop
-
-### Need extra rows calculated to compare across simulations later 
-# First rename newey added columns 
-colnames(checkme)[16] <- "Samp_Adult_Buck"; colnames(checkme)[17] <- "Samp_Adult_Doe" 
-colnames(checkme)[18] <- "Samp_Young_Buck" ; colnames(checkme)[19] <- "Samp_Young_Doe"
-colnames(checkme)[20] <- "Total_Samples_allStrata"
-
-checkme2 <- checkme %>% 
-  mutate(Prevalence = designprevalence) %>% 
-  mutate(Alpha = alpha) %>% 
-  ## Now calculate costs
-  mutate(Cost_Indiana = Total_Samples_allStrata *Indiana) %>% 
-  mutate(Cost_Michigan = Total_Samples_allStrata *Michigan) %>% 
-  mutate(Cost_Ohio = Total_Samples_allStrata *Ohio)
-  
-
-return(checkme2)
-
-} # close function
-
-
-### Set up simulations
-EstSampfunc <- function(setprev = .01, setalpha = .01, setdf = Indiv_county_CheckStations){
-  TargetPoints <- Target_points_func(designprevalence = setprev, alpha = setalpha) 
-  tempdf <- cost_success_func(df = setdf, TargetPoints, designprevalence = setprev, alpha = setalpha)
-  return(sum(tempdf[,20]))
-}
-
-vecalpha <- c(.01, .05, .1)
-vecprev <- c(.001, .01, .1)
-
-checkstations_NoSampWeight <- data.frame()
-setcounter <- 1
-  for(i in vecalpha){
-    for(j in vecprev){
-      HoldNo <- EstSampfunc(setprev = j, setalpha = i, setdf = Indiv_county_CheckStations_wgt)
-      IDCharString <- paste0("Est", "_", "alpha", i, "prev", j)
-      ## Create counter that depends on i & j
-      setcounter
-      checkstations_NoSampWeight[setcounter, 1] <- IDCharString
-      checkstations_NoSampWeight[setcounter, 2] <- HoldNo
-      setcounter <- setcounter + 1
-    }
-  }
-
-
-allharvest_NoSampWeight <- data.frame()
-setcounter <- 1
-  for(i in vecalpha){
-    for(j in vecprev){
-      HoldNo <- EstSampfunc(setprev = j, setalpha = i, setdf = Indiv_county_ALL_wgt)
-      IDCharString <- paste0("Est", "_", "alpha", i, "prev", j)
-      ## Create counter that depends on i & j
-      setcounter
-      allharvest_NoSampWeight[setcounter, 1] <- IDCharString
-      allharvest_NoSampWeight[setcounter, 2] <- HoldNo
-      setcounter <- setcounter + 1
-    }
-  }
-
-
-## Put both approaches together (note - exact same number of samples needed for each)
-# In other words, we don't run out of males to sample
-
-colnames(checkstations_NoSampWeight) <- c("Surveillance Design", "No. Samples Needed Under Weighted Surveillance")
-samples_weighted_comp_SRS <- checkstations_NoSampWeight
-samples_weighted_comp_SRS$'No. Samples Needed Under SRS' <- All_NoSampSRS[,2]
-
-
-
-kable(samples_weighted_comp_SRS,
-      caption = "Table XX. Number of Samples Needed under a Statewide Wide Weighted Sampling Design Compared to the SRS Approach",
-      align = "lrr") %>% 
-  kable_styling(bootstrap_options = "striped")
+  geom_point(aes(x = Prevalence_level, y = county_prev, color = County))+
+  facet_wrap(~Confidence) + 
+   labs(x = "State Wide Prevelance", y = "County Level Prevelence Achieved") 
 
 ```
 
-**Is their a risk of anchoring here?**
+
 
 
 Graph to add: state wide prevalence (x) vs county level prevalence (y) 
-*Still not sure about this graph so not including it for now*
+*Still not sure about this graph, see below...*
+```{r}
+
+```
+
+
+
+### Estimating Prevalence from the Available Samples
+
+For each county, we can take the total number of samples that are available and calculate the total prevalence that could be detected in that county if we were to use all available samples. 
+```{r, echo=FALSE}
+Prev_Indiv_county_CheckStations <- Indiv_county_CheckStations %>% 
+  mutate(Alpha_01 = .01) %>% 
+  mutate(Alpha_05 = .05) %>% 
+  mutate(Alpha_1 = .1) %>% 
+  pivot_longer(cols = c("Alpha_01", "Alpha_05", "Alpha_1"), 
+               names_to = "Alpha", values_to = "Alpha_level") %>% 
+  ### Now calc prev from number of samples 
+  # extra step to make sure not too wonky 
+  mutate(confidencecalc = 1 - Alpha_level) %>% 
+  mutate(EstPrev = 1 - (Alpha_level)^(1/ContyTotal) )
+
+### How are prevalence values still so high? 
+
+## Set up table
+Prev_Indiv_county_CheckStations_tbl <- Prev_Indiv_county_CheckStations %>% 
+  select(County, ContyTotal, confidencecalc, EstPrev )
+
+#colnames(Prev_Indiv_county_CheckStations_tbl) <- c("County", "No. Samples", "Confidence Level", "Prevalence")
+
+#kable(Prev_Indiv_county_CheckStations_tbl,
+#      caption = "Table 9. Total Prevalence that for a Set Level of Alpha Given the Total Number of Samples #in a County for the Check Stations Dataset",
+#      align = "lrrr") %>% 
+#  kable_styling(bootstrap_options = "striped")
+
+ggplot(Prev_Indiv_county_CheckStations_tbl) + 
+  geom_point(aes(x = EstPrev, y = factor(County), color = factor(confidencecalc))) + 
+  labs(x = "County Level Prevalence", y = "County", color = "Confidence Level")
+
+```
+
+

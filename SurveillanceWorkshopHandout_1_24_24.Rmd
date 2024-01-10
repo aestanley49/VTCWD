@@ -4,6 +4,22 @@ output: word_document
 date: "2024-1-24"
 ---
 
+Notes: Outstanding Qs/Issues
+- final graph
+- How to address cost information
+- Whether we get data from VT
+- Need to make theme/look of handout consistent 
+- Figure caption comments x2
+- Last 2 figures redundant? 
+
+reframe
+here is relationship at any unit of interest 
+start at what we could do at county level 
+here is what we can do with county data
+here is what happens when we scale up at the state level
+copy back to state level (first graph again with information)
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -15,6 +31,7 @@ library(readxl)
 library(knitcitations)
 library(kableExtra) ## devtools::install_github("kupietz/kableExtra") #some issue needed patching
 library(flextable) #kable doesn't knit to word
+library(directlabels) # To add labels to lines in ggplot
 
 ### ### Read in data
 countytbl <- read_excel("Tablesfrom2022DeerHarvestReport.xlsx", sheet = "Table012")
@@ -41,10 +58,10 @@ for(i in 1:nrow(fulldf)){
 }
 ```
 
-### The Relationship between prevalence, confidence, and number of samples
+### The relationship between prevalence, confidence, and number of samples
 
 
-The graph below shows the number of samples required to have a 90%, 95%, or 99% confidence (see colored lines) in detecting at least one case of chronic wasting disease, under various assumed prevalences (x-axis). Prevalence refers to the proportion of the diseased population.
+The graph below shows the number of samples required to have a 90%, 95%, or 99% confidence (see colored lines) in detecting *at least one* case of chronic wasting disease, under various assumed prevalences (x-axis). Prevalence refers to the proportion of the population that is diseased.
 
 
 ```{r genDFs, include= FALSE}
@@ -150,20 +167,25 @@ ggplot(All_NoSampSRS_grph_setup) +
   geom_hline(aes(yintercept=yintercept, linetype=Lines), cutoff, color = "blue") +
   geom_hline(aes(yintercept=yintercept, linetype=Lines), cutoff2, color = "darkgreen") +
   geom_hline(aes(yintercept=yintercept, linetype=Lines), cutoff3, color = "darkblue") + 
-  labs(caption = "Note: Adult Buck Count totals 2688 and is not included on the graph")  
+  labs(caption = "Note: Adult Buck Count totals 2688 and is not included on the graph") + 
+  theme(axis.text=element_text(size=14, colour="black"),
+        axis.title=element_text(size=16,colour="black"),
+        legend.text=element_text(size=12), 
+        panel.background = element_rect(fill = "white", colour = "grey50"))
 
 
 
 ```
-
+*!!!!!!! not about particular unit (county/state) but general statistical relationship 
+*** Double check the proportion coming from VT check data (assume small proportion) --> biocheck 10% (or less) of the regular season harvest
 
 <br>
 <br>
 
-### Determine whether current harvest/check station activity allows Vermont to meet surveillance goals when samples are distributed at the county level
+### For a given state wide prevalence level, what is the achieved county-level prevalence given all estimated checked animals?
 
 *If we get data from Vermont:*
-We use data from the 2022 harvest for individuals sampled at biological check stations. Each individual is classified into a strata (adult male, adult female, yearling male, and yearling female), season (first weekend of regular or youth hunt), and classified into wildlife management unit (WMU).  
+As an example of what could be achieved using biological check stations for data collection, we use data from the 2022 Vermont harvest. Each harvested individual is classified into a strata (adult male, adult female, yearling male, and yearling female), season (first weekend of regular or youth hunt), and wildlife management unit (WMU).  
 
 *If we don't get data from Vermont and use simulated data:*
 We use values from the Vermont 2022 Deer Harvest report to estimate counts of individuals in strata (adult male, adult female, yearling male, and yearling female), harvested in Vermont’s 14 counties, across harvest seasons (archery, youth, novice, October muzzle, regular, and December muzzle). We use an multinomial with probability informed by percentage breakdowns in the deer harvest report to estimate the count of each strata in a county by season. Vermont only collects samples from check stations from the first weekend of the regular season and from the youth hunt. We estimate that checked individuals from the regular season were only 1/3 of the total harvest. Our dataset only includes individuals harvested in the youth hunt and one-third of individuals harvested in the regular season. 
@@ -174,10 +196,10 @@ With these data, we calculate the number of samples needed to detect CWD at a gi
 
 Under a simplified random sample (SRS), the confidence level heavily influences the number of samples needed and associated costs. 
 
-Here, we divide the total number of samples needed for specific combinations of confidence and prevalence proportionally by county and then identify whether the number of samples available at a county level is enough to meet the proportional allocation. The proportional number of samples needed per county is based on the proportion of harvest. We can get the sample size we need for all counties except under one sample design scenario where we are trying to detect a small amount of the disease with high confidence (alpha of .01 and prevalence of .001)
-*We no longer have a prevalence of .001 so there are no cases where we don't have enough samples. Keep?*
+Here, we divide the total number of samples needed for specific combinations of state-level confidence and prevalence proportionally by WMU and then identify whether the number of samples available at a WMU level through biological check stations is enough to meet the proportional allocation. The proportional number of samples needed per WMU is based on the proportion of the total harvest generated by that WMU. 
 
-```{r, echo=FALSE, message = F, warning = F, fig.cap="Figure 2. Number of Samples per County", fig.width=10, fig.height=11}
+
+```{r, echo=FALSE, message = F, warning = F, fig.cap="Figure 2. Resulting Prevalence at County Level", fig.width=10, fig.height=11}
 SRS_for_dfs_func <- function(Indiv_county_ALL){
 
   Indiv_county_ALL_SRS <- Indiv_county_ALL %>% 
@@ -244,30 +266,50 @@ Indiv_county_CheckStations_SRS <- SRS_for_dfs_func(Indiv_county_CheckStations)
 Indiv_county_CheckStations_SRS <- Indiv_county_CheckStations_SRS %>% 
   mutate(county_prev = 1- (Alpha_level^(1/NoSamplesperCounty))) %>% 
   mutate(Confidence_num = (1 - Alpha_level) *100) %>%  #create confidence label
-  mutate(Confidence = paste0(Confidence_num, "%", " confidence"))
+  mutate(Confidence = paste0(Confidence_num, "%", " confidence")) %>% 
+  mutate(line_names = as.character(round(prop,2)))
 
 ggplot(Indiv_county_CheckStations_SRS) + 
   geom_point(aes(x = Prevalence_level, y = county_prev, color = County))+
-  facet_wrap(~Confidence) + 
-   labs(x = "State Wide Prevelance", y = "County Level Prevelence Achieved") 
+ # facet_wrap(~Confidence) + 
+   labs(x = "State Wide Prevelance", y = "County Level Prevelence Achieved") + 
+  scale_y_continuous(expand=c(0, .105))+
+  geom_dl(aes(x = Prevalence_level, y = county_prev,label = line_names), method = list("last.points", cex=.8, hjust=1.2) ) +
+  labs(caption = "Note: The proportion of harvest per county is given in the text")  
 
 ```
 
+The smaller the proportion of harvest is for a county, the less power that county has to detect CWD and higher the resulting county-level prevalence will be for a given state prevalence level.
 
 
-
-Graph to add: state wide prevalence (x) vs county level prevalence (y) 
-*Still not sure about this graph, see below...*
+*Note, this doesn't change with alpha, does that make sense?*
+scrap work to check this...
 ```{r}
+prop <- c(.7, .2, .1)
+Setpre <- c(.01, .1)
+setalpha <- c(.1, .05)
+#NoSamples = log(-((1-Alpha_level) - 1))/(log(1 - Prevalence_level))
+NoSamples.1 = log(-((1-.1) - 1))/(log(1 - .01))
+count1a <- NoSamples.1*.7
+NoSamples.05 = log(-((1-.05) - 1))/(log(1 - .01))
+count1b <- NoSamples.05*.7
 
+#EstPrev = 1 - (Alpha_level)^(1/NoSamplesperCounty)
+EstPreva = 1 - (.1)^(1/count1a)
+
+EstPrevb = 1 - (.05)^(1/count1b)
+
+print(EstPreva)
+print(EstPrevb)
 ```
 
 
 
-### Estimating Prevalence from the Available Samples
 
-For each county, we can take the total number of samples that are available and calculate the total prevalence that could be detected in that county if we were to use all available samples. 
-```{r, echo=FALSE}
+### Estimating our power to detect CWD across counties using all available samples
+
+For each county, we can take the prevalence where we would have the power to detect CWD at least once for a given confidence. 
+```{r, echo=FALSE, fig.cap="Figure 3. Prevalence Level from Available Samples per County"}
 Prev_Indiv_county_CheckStations <- Indiv_county_CheckStations %>% 
   mutate(Alpha_01 = .01) %>% 
   mutate(Alpha_05 = .05) %>% 
@@ -292,10 +334,25 @@ Prev_Indiv_county_CheckStations_tbl <- Prev_Indiv_county_CheckStations %>%
 #      align = "lrrr") %>% 
 #  kable_styling(bootstrap_options = "striped")
 
+# The palette with grey:
+cbPalette <- c("#999999", "#56B4E9", "#009E73")
+
+
 ggplot(Prev_Indiv_county_CheckStations_tbl) + 
   geom_point(aes(x = EstPrev, y = factor(County), color = factor(confidencecalc))) + 
-  labs(x = "County Level Prevalence", y = "County", color = "Confidence Level")
+  labs(x = "County Level Prevalence", y = "County", color = "Confidence Level") + 
+  scale_color_brewer(palette = "Dark2")
 
 ```
 
+### Costs
+
+Costs of surveillance vary with the scale of the surveillance program, whether hunters or others (e.g., VFWD staff, processors) are collecting the samples, and where the laboratory analyses are completed. Estimates of cost per sample range from $10/sample (current Vermont costs for low sample sizes) to $188/sample (estimate from Michigan which has a large, staff-based surveillance program).
+
+### next figure...
+Set prevalence level want to detect at county level and then add number of samples need up..  
+*This will be Figure 1 with 14 times the y-axis*
+```{r}
+
+```
 

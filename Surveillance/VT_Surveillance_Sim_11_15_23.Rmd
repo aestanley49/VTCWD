@@ -17,8 +17,8 @@ library(knitcitations)
 library(kableExtra) ## devtools::install_github("kupietz/kableExtra") #some issue needed patching
 
 ### ### Read in data
-countytbl <- read_excel("Tablesfrom2022DeerHarvestReport.xlsx", sheet = "Table012")
-PercentSeason <- read_excel("Tablesfrom2022DeerHarvestReport.xlsx", sheet = "PercentSeason")
+countytbl <- read_excel("Surveillance/Tablesfrom2022DeerHarvestReport.xlsx", sheet = "Table012")
+PercentSeason <- read_excel("Surveillance/Tablesfrom2022DeerHarvestReport.xlsx", sheet = "PercentSeason")
 
 ### ### Initial cleaning
 # Drop extra columns from dataframe 
@@ -788,6 +788,9 @@ ggplot(Indiv_county_CheckStations_SRS_backcalc) +
 ```
 <br>
 *Note, value is the same regardless of alpha value and as scrap work below indicates*
+
+
+
 
 
 

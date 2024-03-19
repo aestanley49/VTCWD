@@ -280,6 +280,33 @@ cwd_stoch_model <- function(params) {
     message("hunt.var is missing, using default value")
     hunt.var <- 0.005
   }
+  ### Adding additional variance parameters here.. ###
+  ## survival
+  if(exists("juv.sur.var")==FALSE){
+    message("juv.sur.var is missing, using default value")
+    juv.sur.var <- 0.005
+  }
+  if(exists("ad.f.sur.var")==FALSE){
+    message("ad.f.sur.var is missing, using default value")
+    ad.f.sur.var <- 0.005
+  }
+  if(exists("ad.m.sur.var")==FALSE){
+    message("ad.m.sur.var is missing, using default value")
+    ad.m.sur.var <- 0.005
+  }
+  ## reproduction
+  if(exists("juv.repro.var")==FALSE){
+    message("juv.repro.var is missing, using default value")
+    juv.repro.var <- 0.005
+  }
+  if(exists("ad.repro.var")==FALSE){
+    message("ad.repro.var is missing, using default value")
+    ad.repro.var <- 0.005
+  }
+  #note - model doesn't have fawn reproduction. 
+  
+  
+  
   ###### check parameter values ###
   if(fawn.an.sur < 0) warning("fawn survival must be positive")
   if(fawn.an.sur > 1) warning("fawn survival must be < 1")
@@ -336,13 +363,13 @@ cwd_stoch_model <- function(params) {
   # Estimate shape and scale parameters for the Beta distribution given the user
   # input of mean and variance.  natural survival
   fawn.s.b <- est_beta_params(fawn.an.sur, fawn.sur.var)
-  juv.s.b <- est_beta_params(juv.an.sur, sur.var)
-  ad.f.s.b <- est_beta_params(ad.an.f.sur, sur.var)
-  ad.m.s.b <- est_beta_params(ad.an.m.sur, sur.var)
+  juv.s.b <- est_beta_params(juv.an.sur, juv.sur.var)
+  ad.f.s.b <- est_beta_params(ad.an.f.sur, ad.f.sur.var)
+  ad.m.s.b <- est_beta_params(ad.an.m.sur, ad.m.sur.var)
 
   # reproduction
-  juv.r.b <- est_beta_params(juv.repro/2, repro.var)
-  ad.r.b <- est_beta_params(ad.repro/2, repro.var)
+  juv.r.b <- est_beta_params(juv.repro/2, juv.repro.var)
+  ad.r.b <- est_beta_params(ad.repro/2, ad.repro.var)
 
   # hunting
   hunt.fawn.b <- est_beta_params(hunt.mort.fawn, hunt.var)
@@ -466,19 +493,20 @@ cwd_stoch_model <- function(params) {
     # the random parameter draws births happen in June, model starts in May
     if (t%%12 == 2) {
 
-      # the last age category remains in place and doesn't die
-       St.f[2:(n.age.cats - 1), t] <- St.f[1:(n.age.cats - 2), t - 1]
-      St.f[n.age.cats, t] <- St.f[n.age.cats, t - 1] +
-                                St.f[(n.age.cats - 1), t - 1]
+      # the last age category remains in place and doesn't die 
+      ## *** Changed this to assume 75% mortality and round... 
+      St.f[2:(n.age.cats - 1), t] <- St.f[1:(n.age.cats - 2), t - 1]
+      St.f[n.age.cats, t] <- round((St.f[n.age.cats, t - 1] +
+                                      St.f[(n.age.cats - 1), t - 1]) * .25)
       St.m[2:(n.age.cats - 1), t] <- St.m[1:(n.age.cats - 2), t - 1]
-      St.m[n.age.cats, t] <- St.m[n.age.cats, t - 1] +
-                                St.m[(n.age.cats - 1), t - 1]
+      St.m[n.age.cats, t] <- round((St.m[n.age.cats, t - 1] +
+                                      St.m[(n.age.cats - 1), t - 1])*.25)
       It.f[2:(n.age.cats - 1), t, ] <- It.f[1:(n.age.cats - 2), t - 1, ]
-      It.f[n.age.cats, t, ] <- It.f[n.age.cats, t - 1, ] +
-                                  It.f[(n.age.cats - 1), t - 1, ]
+      It.f[n.age.cats, t, ] <- round((It.f[n.age.cats, t - 1, ] +
+                                        It.f[(n.age.cats - 1), t - 1, ])*.25)
       It.m[2:(n.age.cats - 1), t, ] <- It.m[1:(n.age.cats - 2), t - 1, ]
-      It.m[n.age.cats, t, ] <- It.m[n.age.cats, t - 1, ] +
-                                It.m[(n.age.cats - 1), t - 1, ]
+      It.m[n.age.cats, t, ] <- round((It.m[n.age.cats, t - 1, ] +
+                                        It.m[(n.age.cats - 1), t - 1, ])*.25)
 
       # reproduction
       I_juv <- sum(It.f[2, t - 1, ])

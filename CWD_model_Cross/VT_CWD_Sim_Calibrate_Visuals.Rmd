@@ -1,0 +1,306 @@
+---
+title: "VT_Calibrate_Visual"
+output: word_document
+date: "2024-03-19"
+---
+
+set up
+```{r}
+library(Hmisc)
+library(tidyverse)
+
+source("./CWD_model_Cross/est_beta_params.R")
+source("/CWD_model_Cross/allocate_deaths.R")
+source("CWD_model_Cross/cwd_stoch_model_calibrate.R")
+source("cwd_stoch_wrapper.r")
+```
+
+Run sims
+```{r params}
+
+## trying to get 2.5 sex ratio.. can' almost reach 2. Popn is declining, but still have .75 male survival 
+# params <- list(fawn.an.sur = 0.6, juv.an.sur = 0.8, ad.an.f.sur = 0.82, 
+# ad.an.m.sur = 0.1, 
+# fawn.repro = 0.06, juv.repro = 1.7, ad.repro = 1.8, 
+# hunt.mort.fawn = 0.015, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.2,
+# hunt.mort.ad.f = 0.2, hunt.mort.ad.m = 0.95, 
+# ini.fawn.prev = 0.00,
+# ini.juv.prev = 0.00, ini.ad.f.prev = 0.00,  ini.ad.m.prev = 0.00,
+# n.age.cats = 12,  p = 0.27, env.foi = 0,  beta.f = 0.08,  beta.m = 0.08,
+# theta = 1, n0 = 1000, n.years = 50, rel.risk = 1.0, 
+# repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.005,
+# #my added var params
+# juv.sur.var = 0.005, ad.f.sur.var = 0.05, ad.m.sur.var = 0.05,
+# juv.repro.var = 0.005, ad.repro.var = 0.005
+# )
+
+params <- list(fawn.an.sur = 0.5, juv.an.sur = 0.8, ad.an.f.sur = 0.82, 
+ad.an.m.sur = 0.3, 
+fawn.repro = 0.06, juv.repro = 1.7, ad.repro = 1.8, 
+hunt.mort.fawn = 0.1, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.25,
+hunt.mort.ad.f = 0.2, hunt.mort.ad.m = 0.85, 
+ini.fawn.prev = 0.00,
+ini.juv.prev = 0.00, ini.ad.f.prev = 0.00,  ini.ad.m.prev = 0.00,
+n.age.cats = 12,  p = 0.27, env.foi = 0,  beta.f = 0.08,  beta.m = 0.08,
+theta = 1, n0 = 1000, n.years = 50, rel.risk = 1.0, 
+repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.005,
+#my added var params
+juv.sur.var = 0.005, ad.f.sur.var = 0.05, ad.m.sur.var = 0.05,
+juv.repro.var = 0.005, ad.repro.var = 0.005
+)
+
+simsout <- cwd_stoch_wrapper(params, nsims = 10)
+```
+
+```{r}
+sexratio <- simsout$counts %>% 
+  group_by(sim, month, year) %>% 
+  dplyr::select(-c(category, age, disease)) %>% 
+  pivot_wider(names_from = c(sex), values_from = population, values_fn = ~sum(.x, na.rm = TRUE)) %>% 
+  mutate(sexratio = f/m)
+
+mean_sim <- sexratio %>% 
+  group_by(year) %>% 
+  summarise(sexratio = mean(sexratio),
+            sexratio_sd = sd(sexratio)) %>% 
+  mutate(upper_CI = sexratio+sexratio_sd, 
+         lower_CI = sexratio-sexratio_sd)
+
+ggplot(data = sexratio,
+                   aes(x = year, y = sexratio)) +
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +
+  geom_line(data = mean_sim, color = "black", size = 1) +
+  stat_summary(geom="ribbon", fun.data = mean_cl_boot, 
+               conf.int=0.95, alpha = 0.0, linetype = "dashed", color = "black", size = .75)+
+  geom_hline(yintercept = 2.5, color = "red") +
+  labs(x = "time (years)", 
+       y = "sex ratio", title = "Sex Ratio Over Time")+
+  theme_classic()
+```
+
+
+```{r}
+entirepop  <- sexratio %>% 
+  mutate(N = f + m)
+
+mean_sim <- entirepop %>% 
+  group_by(year) %>% 
+  summarise(N = mean(N),
+            N_sd = sd(N)) %>% 
+  mutate(upper_CI = N+N_sd, 
+         lower_CI = N-N_sd)
+
+ggplot(data = entirepop,
+                   aes(x = year, y = N)) +
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +
+  geom_line(data = mean_sim, color = "black", size = 1) +
+  stat_summary(geom="ribbon", fun.data = mean_cl_boot, 
+               conf.int=0.95, alpha = 0.0, linetype = "dashed", color = "black", size = .75)+
+#  geom_hline(yintercept = 2.5, color = "red") + ## This will depend on pop starting size
+  labs(x = "time (years)", 
+       y = "Abundance (N)", title = "Abundance Over Time")+
+  theme_classic()
+```
+
+Doe:Fawn ratio
+Highest I can get this is 1.2 and then the abundance goes exponential 
+```{r}
+doe_fawn_ratio <- simsout$counts %>% 
+  mutate(IDfawn = case_when(age == 1 ~ "fawns", age != 1 ~  "notfawn")) %>% 
+  filter(!(sex == "m" & IDfawn == "notfawn")) %>% 
+  dplyr::select(-c(category, age, sex, disease)) %>% 
+  pivot_wider(names_from = c(IDfawn), values_from = population, values_fn = ~sum(.x, na.rm = TRUE)) %>% 
+  mutate(ratio = fawns/notfawn)
+
+mean_sim <- doe_fawn_ratio %>% 
+  group_by(year) %>% 
+  summarise(ratio = mean(ratio),
+            ratio_sd = sd(ratio)) %>% 
+  mutate(upper_CI = ratio+ratio_sd, 
+         lower_CI = ratio-ratio_sd)
+
+ggplot(data = doe_fawn_ratio,
+                   aes(x = year, y = ratio)) +
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +
+  geom_line(data = mean_sim, color = "black", size = 1) +
+  stat_summary(geom="ribbon", fun.data = mean_cl_boot, 
+               conf.int=0.95, alpha = 0.0, linetype = "dashed", color = "black", size = .75)+
+  geom_hline(yintercept = 1.5, color = "red") + ## This will depend on pop starting size
+  labs(x = "time (years)", 
+       y = "Doe:Fawn Ratio", title = "Doe:Fawn Ratio Over Time")+
+  theme_classic()
+
+# params <- list(fawn.an.sur = 0.6, juv.an.sur = 0.7, ad.an.f.sur = 0.72, 
+# ad.an.m.sur = 0.8, 
+# fawn.repro = 0.06, juv.repro = 1.9, ad.repro = 1.9, 
+# hunt.mort.fawn = 0.015, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.2,
+# hunt.mort.ad.f = 0.2, hunt.mort.ad.m = 0.45, 
+# ini.fawn.prev = 0.00,
+# ini.juv.prev = 0.00, ini.ad.f.prev = 0.00,  ini.ad.m.prev = 0.00,
+# n.age.cats = 12,  p = 0.27, env.foi = 0,  beta.f = 0.08,  beta.m = 0.08,
+# theta = 1, n0 = 1000, n.years = 50, rel.risk = 1.0, 
+# repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.005,
+# #my added var params
+# juv.sur.var = 0.005, ad.f.sur.var = 0.005, ad.m.sur.var = 0.005,
+# juv.repro.var = 0.005, ad.repro.var = 0.005
+# )
+```
+
+Check survival for each class (adult, juv, fawns)
+```{r survivedf}
+mod_deaths <- simsout$deaths %>% 
+  filter(population > 0) %>% 
+    mutate(IDfawn = case_when(age == 1 ~ 1, age != 1 ~  0)) %>% 
+    mutate(IDjuv = case_when(age == 2 ~ 1, age != 2 ~  0)) %>% 
+    mutate(IDadult = case_when(age > 2 ~ 1, age < 2 ~  0)) %>% 
+    mutate(IDf = case_when(sex == "f" ~ 1, sex != "f" ~  0)) %>% 
+    mutate(IDm = case_when(sex == "m" ~ 1, sex != "m" ~  0)) %>% 
+      mutate(FawnCount = population * IDfawn) %>% 
+      mutate(JuvCount = population * IDjuv) %>% 
+      mutate(AFCount = population * IDadult * IDf) %>% 
+      mutate(AMCount = population * IDadult * IDm)  %>% 
+  mutate(age_class = ifelse(age == 1, "fawn",
+                               ifelse(age == 2, "juv", "adult"))) %>% 
+    mutate(year = round(year)) %>% 
+  group_by(sim, year,age_class) %>% 
+  summarise(dead_fawns = sum(FawnCount),
+            dead_juv = sum(JuvCount),
+            dead_AF = sum(AFCount),
+            dead_AM = sum(AMCount)) %>% 
+  mutate_at(vars(dead_fawns, dead_juv, dead_AF, dead_AM), replace_na, 0)
+
+
+mod_counts <- simsout$counts %>% 
+  filter(population > 0) %>% 
+    mutate(IDfawn = case_when(age == 1 ~ 1, age != 1 ~  0)) %>% 
+    mutate(IDjuv = case_when(age == 2 ~ 1, age != 2 ~  0)) %>% 
+    mutate(IDadult = case_when(age > 2 ~ 1, age < 2 ~  0)) %>% 
+    mutate(IDf = case_when(sex == "f" ~ 1, sex != "f" ~  0)) %>% 
+    mutate(IDm = case_when(sex == "m" ~ 1, sex != "m" ~  0)) %>% 
+      mutate(FawnCount = population * IDfawn) %>% 
+      mutate(JuvCount = population * IDjuv) %>% 
+      mutate(AFCount = population * IDadult * IDf) %>% 
+      mutate(AMCount = population * IDadult * IDm) %>% 
+  mutate(age_class = ifelse(age == 1, "fawn",
+                               ifelse(age == 2, "juv", "adult"))) %>% 
+    mutate(year = round(year)) %>% 
+  group_by(sim, year,age_class) %>% 
+  summarise(alive_fawns = sum(FawnCount),
+            alive_juv = sum(JuvCount),
+            alive_AF = sum(AFCount),
+            alive_AM = sum(AMCount)) %>% 
+  mutate_at(vars(alive_fawns, alive_juv, alive_AF, alive_AM), replace_na, 0)
+
+survival_df <- full_join(mod_deaths, mod_counts, by = c("sim", "year", "age_class"))
+```
+
+
+fawn survival
+```{r}
+fawn_sur <- survival_df %>% 
+  filter(age_class == "fawn") %>% 
+  mutate(survival = alive_fawns/ (alive_fawns + dead_fawns))
+
+mean_sim <- fawn_sur %>% 
+  group_by(year) %>% 
+  summarise(survival = mean(survival),
+            survival_sd = sd(survival)) %>% 
+  mutate(upper_CI = survival+survival_sd, 
+         lower_CI = survival-survival_sd)
+
+ggplot(data = fawn_sur,
+                   aes(x = year, y = survival)) +
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +
+  geom_line(data = mean_sim, color = "black", size = 1) +
+  stat_summary(geom="ribbon", fun.data = mean_cl_boot, 
+               conf.int=0.95, alpha = 0.0, linetype = "dashed", color = "black", size = .75)+
+  geom_hline(yintercept = .6, color = "red") + ## This will depend on pop starting size
+  labs(x = "time (years)", 
+       y = "survival", title = "Fawn survival per Year")+
+  theme_classic()
+```
+
+juvenile survival
+```{r}
+juv_sur <- survival_df %>% 
+  filter(age_class == "juv") %>% 
+  mutate(survival = alive_juv/ (alive_juv + dead_juv))
+
+mean_sim <- juv_sur %>% 
+  group_by(year) %>% 
+  summarise(survival = mean(survival),
+            survival_sd = sd(survival)) %>% 
+  mutate(upper_CI = survival+survival_sd, 
+         lower_CI = survival-survival_sd)
+
+ggplot(data = juv_sur,
+                   aes(x = year, y = survival)) +
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +
+  geom_line(data = mean_sim, color = "black", size = 1) +
+  stat_summary(geom="ribbon", fun.data = mean_cl_boot, 
+               conf.int=0.95, alpha = 0.0, linetype = "dashed", color = "black", size = .75)+
+  geom_hline(yintercept = .8, color = "red") + ## This will depend on pop starting size
+  labs(x = "time (years)", 
+       y = "survival", title = "Juvenile Survival per Year")+
+  theme_classic()
+```
+
+
+
+Adult Female survival
+```{r}
+AF_sur <- survival_df %>% 
+  filter(age_class == "adult") %>% 
+  select(-c(dead_AM, alive_AM)) %>% 
+  mutate(survival = alive_AF/ (alive_AF + dead_AF))
+
+mean_sim <- AF_sur %>% 
+  group_by(year) %>% 
+  summarise(survival = mean(survival),
+            survival_sd = sd(survival)) %>% 
+  mutate(upper_CI = survival+survival_sd, 
+         lower_CI = survival-survival_sd)
+
+ggplot(data = AF_sur,
+                   aes(x = year, y = survival)) +
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +
+  geom_line(data = mean_sim, color = "black", size = 1) +
+  stat_summary(geom="ribbon", fun.data = mean_cl_boot, 
+               conf.int=0.95, alpha = 0.0, linetype = "dashed", color = "black", size = .75)+
+  geom_hline(yintercept = .82, color = "red") + ## This will depend on pop starting size
+  labs(x = "time (years)", 
+       y = "survival", title = "Adult Female Survival per Year")+
+  theme_classic()
+```
+
+
+
+
+
+Adult Male survival
+```{r}
+AM_sur <- survival_df %>% 
+  filter(age_class == "adult") %>% 
+  select(-c(dead_AF, alive_AF)) %>% 
+  mutate(survival = alive_AM/ (alive_AM + dead_AM))
+
+mean_sim <- AM_sur %>% 
+  group_by(year) %>% 
+  summarise(survival = mean(survival),
+            survival_sd = sd(survival)) %>% 
+  mutate(upper_CI = survival+survival_sd, 
+         lower_CI = survival-survival_sd)
+
+ggplot(data = AM_sur,
+                   aes(x = year, y = survival)) +
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +
+  geom_line(data = mean_sim, color = "black", size = 1) +
+  stat_summary(geom="ribbon", fun.data = mean_cl_boot, 
+               conf.int=0.95, alpha = 0.0, linetype = "dashed", color = "black", size = .75)+
+  geom_hline(yintercept = 1, color = "red") + ## This will depend on pop starting size
+  labs(x = "time (years)", 
+       y = "survival", title = "Adult Male Survival per Year")+
+  theme_classic()
+```
+
+

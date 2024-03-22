@@ -662,24 +662,24 @@ cwd_stoch_model <- function(params) {
 
 
 ### Sex ratio - !!! This is too low... starts off high, but why is it dropping back down??
-sexratio <- counts.long %>% 
-  group_by(month, year) %>% 
-  dplyr::select(-c(category, age, disease)) %>% 
-  pivot_wider(names_from = c(sex), values_from = population, values_fn = ~sum(.x, na.rm = TRUE)) %>% 
-  mutate(sexratio = f/m)
-
-entirepop  <- sexratio %>% 
-  mutate(wholepop = f + m)
-plot(entirepop$year, entirepop$wholepop)
+# sexratio <- counts.long %>% 
+#   group_by(month, year) %>% 
+#   dplyr::select(-c(category, age, disease)) %>% 
+#   pivot_wider(names_from = c(sex), values_from = population, values_fn = ~sum(.x, na.rm = TRUE)) %>% 
+#   mutate(sexratio = f/m)
+# 
+# entirepop  <- sexratio %>% 
+#   mutate(wholepop = f + m)
+# plot(entirepop$year, entirepop$wholepop)
 
 ### Doe: Fawn (pre & post hunt) - 
 
-doe_fawn_ratio <- counts.long %>% 
-  mutate(IDfawn = case_when(age == 1 ~ "fawns", age != 1 ~  "notfawn")) %>% 
-  filter(!(sex == "m" & IDfawn == "notfawn")) %>% 
-  dplyr::select(-c(category, age, sex, disease)) %>% 
-  pivot_wider(names_from = c(IDfawn), values_from = population, values_fn = ~sum(.x, na.rm = TRUE)) %>% 
-  mutate(sexratio = fawns/notfawn)
+# doe_fawn_ratio <- counts.long %>% 
+#   mutate(IDfawn = case_when(age == 1 ~ "fawns", age != 1 ~  "notfawn")) %>% 
+#   filter(!(sex == "m" & IDfawn == "notfawn")) %>% 
+#   dplyr::select(-c(category, age, sex, disease)) %>% 
+#   pivot_wider(names_from = c(IDfawn), values_from = population, values_fn = ~sum(.x, na.rm = TRUE)) %>% 
+#   mutate(sexratio = fawns/notfawn)
 # pre/post hunt months?
   
 

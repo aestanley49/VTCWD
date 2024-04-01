@@ -126,7 +126,7 @@
 #' hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.2,
 #' hunt.mort.ad.f = 0.15, hunt.mort.ad.m = 0.35, ini.fawn.prev = 0.01,
 #' ini.juv.prev = 0.03, ini.ad.f.prev = 0.04,  ini.ad.m.prev = 0.04,
-#' n.age.cats = 12,  p = 0.27, env.foi = 0,  beta.f = 0.08,  beta.m = 0.08,
+#' n.age.cats = 12, n.age.cats.f = 15, n.age.cats.m = 10,  p = 0.27, env.foi = 0,  beta.f = 0.08,  beta.m = 0.08,
 #' theta = 1, n0 = 1000, n.years = 10, rel.risk = 1.0, 
 #' repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.005)
 #' 
@@ -223,6 +223,16 @@ cwd_stoch_model <- function(params) {
   if(exists("n.age.cats")==FALSE){
     message("# of age categories is missing, using default value")
     n.age.cats <- 12
+  }
+  
+  if(exists("n.age.cats.m")==FALSE){
+    message("# of age categories is missing, using default value")
+    n.age.cats.m <- 10
+  }
+  
+  if(exists("n.age.cats.f")==FALSE){
+    message("# of age categories is missing, using default value")
+    n.age.cats.f <- 15
   }
   
   if(exists("p")==FALSE){
@@ -381,48 +391,49 @@ cwd_stoch_model <- function(params) {
   # group into a vector
   # initial female prevalence
   ini.f.prev <- c(ini.fawn.prev, ini.juv.prev,
-                  rep(ini.ad.f.prev, (n.age.cats - 2)))
+                  rep(ini.ad.f.prev, (n.age.cats.f - 2)))
   # initial male prevalence
   ini.m.prev <- c(ini.fawn.prev, ini.juv.prev,
-                  rep(ini.ad.m.prev, (n.age.cats - 2)))
+                  rep(ini.ad.m.prev, (n.age.cats.m - 2)))
 
   # Create the Leslie Matrix to start the population at stable age dist
-  M <- matrix(rep(0, n.age.cats * 2 * n.age.cats * 2), nrow = n.age.cats * 2)
+  M <- matrix(rep(0, (n.age.cats.f + n.age.cats.m) * (n.age.cats.f + n.age.cats.m) ), nrow = (n.age.cats.f + n.age.cats.m))
 
   # replace the -1 off-diagonal with the survival rates
   M[row(M) == (col(M) + 1)] <- c(juv.an.sur * (1 - hunt.mort.juv.f),
                                  rep(ad.an.f.sur *  (1 - hunt.mort.ad.f),
-                                     n.age.cats - 2), 0,
+                                     n.age.cats.f - 2), 0,
                                  c(juv.an.sur * (1 - hunt.mort.juv.m),
                                    rep(ad.an.m.sur * (1 - hunt.mort.ad.m),
-                                       n.age.cats - 2)))
+                                       n.age.cats.m - 2)))
 
   # if you want the top age category to continue to survive
-  M[n.age.cats, n.age.cats] <- ad.an.f.sur * (1 - hunt.mort.ad.f)
-  M[n.age.cats * 2, n.age.cats * 2] <- ad.an.m.sur * (1 - hunt.mort.ad.m)
+  M[n.age.cats.f, n.age.cats.f] <- ad.an.f.sur * (1 - hunt.mort.ad.f)
+  M[(n.age.cats.f + n.age.cats.m) , (n.age.cats.f + n.age.cats.m)] <- ad.an.m.sur * (1 - hunt.mort.ad.m)
 
   # insert the fecundity vector prebirth census
-  M[1, 1:n.age.cats] <- c(0, juv.repro, rep(ad.repro, n.age.cats - 2)) * 0.5 *
+  M[1, 1:n.age.cats.f] <- c(0, juv.repro, rep(ad.repro, n.age.cats.f - 2)) * 0.5 *
     fawn.an.sur * (1 - hunt.mort.fawn)
-  M[n.age.cats + 1, 1:n.age.cats] <- M[1, 1:n.age.cats]
+  M[n.age.cats.f + 1, 1:n.age.cats.m] <- M[1, 1:n.age.cats.m]
 
   # pre-allocate the output matrices
-  tmp <- matrix(0, nrow = n.age.cats, ncol = n.years * 12)
-  St.f <- tmp  # susceptible female vector
-  St.m <- tmp  # suceptible male vector
+  tmp.f <- matrix(0, nrow = n.age.cats.f, ncol = n.years * 12)
+  tmp.m <- matrix(0, nrow = n.age.cats.m, ncol = n.years * 12)
+  St.f <- tmp.f  # susceptible female vector
+  St.m <- tmp.m  # suceptible male vector
   # infectious categories
-  It.m <- array(rep(tmp), dim = c(n.age.cats, n.years * 12, 10))  # females
-  It.f <- array(rep(tmp), dim = c(n.age.cats, n.years * 12, 10))  # males
+  It.f <- array(rep(tmp.f), dim = c(n.age.cats.f, n.years * 12, 10))  # females
+  It.m <- array(rep(tmp.m), dim = c(n.age.cats.m, n.years * 12, 10))  # males
 
   # tracking the # hunted
-  Ht.f <- tmp
-  Ht.m <- tmp
+  Ht.f <- tmp.f
+  Ht.m <- tmp.m
   # natural deaths
-  Dt.f <- tmp
-  Dt.m <- tmp
+  Dt.f <- tmp.f
+  Dt.m <- tmp.m
   # disease deaths
-  CWDt.f <- tmp
-  CWDt.m <- tmp
+  CWDt.f <- tmp.f
+  CWDt.m <- tmp.m
   
   ########STOCHASTIC WINTER CONDITIONS#########
   # Annual Parameter Draws monthly stochastic survival rates
@@ -431,12 +442,10 @@ cwd_stoch_model <- function(params) {
   #############################################
 
   # Intializing with the stable age distribution.
-  St.f[, 1] <- round(popbio::stable.stage(M)[1:n.age.cats] * n0 * (1 - ini.f.prev) *1.7)
-  St.m[, 1] <- round(popbio::stable.stage(M)[(n.age.cats + 1):(n.age.cats * 2)] *
+  St.f[, 1] <- round(popbio::stable.stage(M)[1:n.age.cats.f] * n0 * (1 - ini.f.prev))
+  St.m[, 1] <- round(popbio::stable.stage(M)[(n.age.cats.f + 1):(n.age.cats.f+n.age.cats.m)] *
                        n0 * (1 - ini.m.prev))
   
-  ### ### initializing with wrong sex ratio...
-  # sum(St.f[, 1])/sum(St.m[, 1]) 1.5, need 2.5 
 
   if(sum(St.f[,1]) <= 0) {
     warning("These parameters result in a stable age structure with no surviving 
@@ -444,10 +453,10 @@ cwd_stoch_model <- function(params) {
   } 
   
   # randomly allocating infecteds across ages and categories.
-  It.f[, 1, 1:10] <- rbinom(n.age.cats * 10, round(popbio::stable.stage(M)[1:n.age.cats] *
+  It.f[, 1, 1:10] <- rbinom(n.age.cats.f * 10, round(popbio::stable.stage(M)[1:n.age.cats.f] *
                                                      n0/10), ini.f.prev)
-  It.m[, 1, 1:10] <- rbinom(n.age.cats * 10, round(popbio::stable.stage(M)
-                                                   [(n.age.cats + 1):(n.age.cats * 2)] *
+  It.m[, 1, 1:10] <- rbinom(n.age.cats.m * 10, round(popbio::stable.stage(M)
+                                                   [(n.age.cats.f + 1):(n.age.cats.f + n.age.cats.m)] *
                                                      n0/10), ini.m.prev)
 
   # calculate R0s for adult females and males
@@ -479,38 +488,37 @@ cwd_stoch_model <- function(params) {
     ad.preg.draw <- rbeta(1, ad.r.b$alpha, ad.r.b$beta, ncp = 0)
 
     # group into a vector
-    Sur.f <- c(fawn.sur.draw, juv.sur.draw, rep(ad.f.sur.draw, n.age.cats - 2))
-    Sur.m <- c(fawn.sur.draw, juv.sur.draw, rep(ad.m.sur.draw, n.age.cats - 2))
+    Sur.f <- c(fawn.sur.draw, juv.sur.draw, rep(ad.f.sur.draw, n.age.cats.f - 2))
+    Sur.m <- c(fawn.sur.draw, juv.sur.draw, rep(ad.m.sur.draw, n.age.cats.m - 2))
 
     # stochastic hunting survival rates
     hunt.fawn.draw <- rbeta(1, hunt.fawn.b$alpha, hunt.fawn.b$beta, ncp = 0)
     hunt.juv.f.draw <- rbeta(1, hunt.juv.f.b$alpha, hunt.juv.f.b$beta, ncp = 0)
     hunt.juv.m.draw <- rbeta(1, hunt.juv.m.b$alpha, hunt.juv.m.b$beta, ncp = 0)
-    hunt.f.draw <- rbeta(n.age.cats - 2, hunt.f.b$alpha, hunt.f.b$beta, ncp = 0)
-    hunt.m.draw <- rbeta(n.age.cats - 2, hunt.m.b$alpha, hunt.m.b$beta, ncp = 0)
+    hunt.f.draw <- rbeta(n.age.cats.f - 2, hunt.f.b$alpha, hunt.f.b$beta, ncp = 0)
+    hunt.m.draw <- rbeta(n.age.cats.m - 2, hunt.m.b$alpha, hunt.m.b$beta, ncp = 0)
 
     # on birthdays add in recruits and age everyone by one year also on birthdays do
     # the random parameter draws births happen in June, model starts in May
     if (t%%12 == 2) {
 
       # the last age category remains in place and doesn't die 
-      ## *** Changed this to assume 75% mortality and round... 
-      St.f[2:(n.age.cats - 1), t] <- St.f[1:(n.age.cats - 2), t - 1]
-      St.f[n.age.cats, t] <- round((St.f[n.age.cats, t - 1] +
-                                      St.f[(n.age.cats - 1), t - 1]) * .25)
-      St.m[2:(n.age.cats - 1), t] <- St.m[1:(n.age.cats - 2), t - 1]
-      St.m[n.age.cats, t] <- round((St.m[n.age.cats, t - 1] +
-                                      St.m[(n.age.cats - 1), t - 1])*.25)
-      It.f[2:(n.age.cats - 1), t, ] <- It.f[1:(n.age.cats - 2), t - 1, ]
-      It.f[n.age.cats, t, ] <- round((It.f[n.age.cats, t - 1, ] +
-                                        It.f[(n.age.cats - 1), t - 1, ])*.25)
-      It.m[2:(n.age.cats - 1), t, ] <- It.m[1:(n.age.cats - 2), t - 1, ]
-      It.m[n.age.cats, t, ] <- round((It.m[n.age.cats, t - 1, ] +
-                                        It.m[(n.age.cats - 1), t - 1, ])*.25)
+      St.f[2:(n.age.cats.f - 1), t] <- St.f[1:(n.age.cats.f - 2), t - 1]
+      St.f[n.age.cats.f, t] <- round((St.f[n.age.cats.f, t - 1] +
+                                      St.f[(n.age.cats.f - 1), t - 1]) )
+      St.m[2:(n.age.cats.m - 1), t] <- St.m[1:(n.age.cats.m - 2), t - 1]
+      St.m[n.age.cats.m, t] <- round((St.m[n.age.cats.m, t - 1] +
+                                      St.m[(n.age.cats.m - 1), t - 1]))
+      It.f[2:(n.age.cats.f - 1), t, ] <- It.f[1:(n.age.cats.f - 2), t - 1, ]
+      It.f[n.age.cats.f, t, ] <- round((It.f[n.age.cats.f, t - 1, ] +
+                                        It.f[(n.age.cats.f - 1), t - 1, ]))
+      It.m[2:(n.age.cats.m - 1), t, ] <- It.m[1:(n.age.cats.m - 2), t - 1, ]
+      It.m[n.age.cats.m, t, ] <- round((It.m[n.age.cats.m, t - 1, ] +
+                                        It.m[(n.age.cats.m - 1), t - 1, ]))
 
       # reproduction
       I_juv <- sum(It.f[2, t - 1, ])
-      I_adults <- sum(It.f[3:n.age.cats, t - 1, ])
+      I_adults <- sum(It.f[3:n.age.cats.f, t - 1, ])
 
       fawns_born <- rbinom(1, (St.f[2, t - 1] + I_juv), juv.preg.draw) *2  +
         rbinom(1, (sum(St.f[3:n.age.cats, t - 1]) + I_adults), ad.preg.draw) *2 
@@ -530,16 +538,16 @@ cwd_stoch_model <- function(params) {
 
     ## Natural Mort then hunt then disease mort Then transmission Natural Mortality
     ## susceptibles
-    nat.s.f <- rbinom(n.age.cats, St.f[, t], (1 - Sur.f))
-    nat.s.m <- rbinom(n.age.cats, St.m[, t], (1 - Sur.m))
+    nat.s.f <- rbinom(n.age.cats.f, St.f[, t], (1 - Sur.f))
+    nat.s.m <- rbinom(n.age.cats.m, St.m[, t], (1 - Sur.m))
 
     St.f[, t] <- St.f[, t] - nat.s.f
     St.m[, t] <- St.m[, t] - nat.s.m
     # infecteds
     nat.i.f <- matrix(rbinom(length(It.f[, t, ]), size = It.f[, t, ],
-                             prob = (1 - Sur.f)), nrow = 12)
+                             prob = (1 - Sur.f)), nrow = n.age.cats.f)
     nat.i.m <- matrix(rbinom(length(It.m[, t, ]), size = It.m[, t, ],
-                             prob = (1 - Sur.m)), nrow = 12)
+                             prob = (1 - Sur.m)), nrow = n.age.cats.m)
 
     It.f[, t, ] <- It.f[, t, ] - nat.i.f
     It.m[, t, ] <- It.m[, t, ] - nat.i.m
@@ -555,10 +563,10 @@ cwd_stoch_model <- function(params) {
       Nt.m <- St.m[, t] + Iall.m  # total population of males
 
       # binomial draw on the total hunted
-      Ht.f[, t] <- rbinom(n.age.cats, Nt.f, c(hunt.fawn.draw, hunt.juv.f.draw,
+      Ht.f[, t] <- rbinom(n.age.cats.f, Nt.f, c(hunt.fawn.draw, hunt.juv.f.draw,
                                               hunt.f.draw))
 
-      Ht.m[, t] <- rbinom(n.age.cats, Nt.m, c(hunt.fawn.draw, hunt.juv.m.draw,
+      Ht.m[, t] <- rbinom(n.age.cats.m, Nt.m, c(hunt.fawn.draw, hunt.juv.m.draw,
                                               hunt.m.draw))
 
       # those hunted in the I class overall based on the total hunted, the total that
@@ -589,10 +597,10 @@ cwd_stoch_model <- function(params) {
     # Disease mortality stochastic movement of individuals from I1 to I2 disease
     # induced mortality here by advancing all I's and only a proportion of the 10th
     # category remains
-    I.f.move <- matrix(rbinom(n.age.cats * 10, size = It.f[, t, ], prob = p),
-                       nrow = 12)
-    I.m.move <- matrix(rbinom(n.age.cats * 10, size = It.m[, t, ], prob = p),
-                       nrow = 12)
+    I.f.move <- matrix(rbinom(n.age.cats.f * 10, size = It.f[, t, ], prob = p),
+                       nrow = n.age.cats.f)
+    I.m.move <- matrix(rbinom(n.age.cats.m * 10, size = It.m[, t, ], prob = p),
+                       nrow = n.age.cats.m)
 
     # store info on those that die directly from disease
     CWDt.f[, t] <- I.f.move[, 10]
@@ -606,14 +614,18 @@ cwd_stoch_model <- function(params) {
     It.m[, t, 2:10] <- It.m[, t, 2:10] - I.m.move[, 2:10] + I.m.move[, 1:9]
 
     # Direct transmission considering all I's are equal
-    Iall <- sum(It.f[, t, ] + It.m[, t, ])
-    Nall <- sum(St.f[, t] + St.m[, t]) + Iall
+    # Iall <- sum(It.f[, t, ] + It.m[, t, ])
+    # Nall <- sum(St.f[, t] + St.m[, t]) + Iall
+    
+    ### Need to subset to add and then recombine? Might have been a better way to do this 
+    Iall <- sum(It.f[1:10, t, ] + It.m[, t, ]) + sum(It.f[11:15, t, ])
+    Nall <- sum(St.f[1:10, t] + St.m[, t]) +  sum(St.f[11:15, t])  + Iall
 
     foi.f <- 1 - exp(-beta.f * Iall/Nall^theta)
     foi.m <- 1 - exp(-beta.m * Iall/Nall^theta)
 
-    transmission.f <- rbinom(n.age.cats, St.f[, t], foi.f)
-    transmission.m <- rbinom(n.age.cats, St.m[, t], foi.m)
+    transmission.f <- rbinom(n.age.cats.f, St.f[, t], foi.f)
+    transmission.m <- rbinom(n.age.cats.m, St.m[, t], foi.m)
 
     St.f[, t] <- St.f[, t] - transmission.f
     St.m[, t] <- St.m[, t] - transmission.m
@@ -623,8 +635,8 @@ cwd_stoch_model <- function(params) {
     It.m[, t, 1] <- transmission.m + It.m[, t, 1]
 
     # Environmental transmission happens last
-    envcases.f <- rbinom(n.age.cats, St.f[, t], env.foi)
-    envcases.m <- rbinom(n.age.cats, St.m[, t], env.foi)
+    envcases.f <- rbinom(n.age.cats.f, St.f[, t], env.foi)
+    envcases.m <- rbinom(n.age.cats.m, St.m[, t], env.foi)
 
     St.f[, t] <- St.f[, t] - envcases.f
     St.m[, t] <- St.m[, t] - envcases.m

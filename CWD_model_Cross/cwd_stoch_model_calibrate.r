@@ -226,12 +226,12 @@ cwd_stoch_model <- function(params) {
   }
   
   if(exists("n.age.cats.m")==FALSE){
-    message("# of age categories is missing, using default value")
+    message("# of male age categories is missing, using default value")
     n.age.cats.m <- 10
   }
   
   if(exists("n.age.cats.f")==FALSE){
-    message("# of age categories is missing, using default value")
+    message("# of female age categories is missing, using default value")
     n.age.cats.f <- 15
   }
   
@@ -400,12 +400,21 @@ cwd_stoch_model <- function(params) {
   M <- matrix(rep(0, (n.age.cats.f + n.age.cats.m) * (n.age.cats.f + n.age.cats.m) ), nrow = (n.age.cats.f + n.age.cats.m))
 
   # replace the -1 off-diagonal with the survival rates
+  # M[row(M) == (col(M) + 1)] <- c(juv.an.sur * (1 - hunt.mort.juv.f),
+  #                                rep(ad.an.f.sur *  (1 - hunt.mort.ad.f),
+  #                                    n.age.cats.f - 2), 0,
+  #                                c(juv.an.sur * (1 - hunt.mort.juv.m),
+  #                                  rep(ad.an.m.sur * (1 - hunt.mort.ad.m),
+  #                                      n.age.cats.m - 2)))
+  
   M[row(M) == (col(M) + 1)] <- c(juv.an.sur * (1 - hunt.mort.juv.f),
-                                 rep(ad.an.f.sur *  (1 - hunt.mort.ad.f),
-                                     n.age.cats.f - 2), 0,
-                                 c(juv.an.sur * (1 - hunt.mort.juv.m),
-                                   rep(ad.an.m.sur * (1 - hunt.mort.ad.m),
-                                       n.age.cats.m - 2)))
+                                   rep(ad.an.f.sur *  (1 - hunt.mort.ad.f),
+                                      n.age.cats.f - 2), 0, ## females(15 age classes)
+                                 0.6057, 0.312, 0.3765, 0.4601, 0.4654, 0.5142, 
+                                 0.4863, 0.3899, 0.4094) ## Males(10 age classes)
+  ## Buck survival values come from Nick
+  # "These values come from an age-based reconstruction model.
+  # They are annual survival rates, accounting for all sources of mortality."
 
   # if you want the top age category to continue to survive
   M[n.age.cats.f, n.age.cats.f] <- ad.an.f.sur * (1 - hunt.mort.ad.f)

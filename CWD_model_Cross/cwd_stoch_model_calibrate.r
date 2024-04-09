@@ -400,18 +400,18 @@ cwd_stoch_model <- function(params) {
   M <- matrix(rep(0, (n.age.cats.f + n.age.cats.m) * (n.age.cats.f + n.age.cats.m) ), nrow = (n.age.cats.f + n.age.cats.m))
 
   # replace the -1 off-diagonal with the survival rates
-  # M[row(M) == (col(M) + 1)] <- c(juv.an.sur * (1 - hunt.mort.juv.f),
-  #                                rep(ad.an.f.sur *  (1 - hunt.mort.ad.f),
-  #                                    n.age.cats.f - 2), 0,
-  #                                c(juv.an.sur * (1 - hunt.mort.juv.m),
-  #                                  rep(ad.an.m.sur * (1 - hunt.mort.ad.m),
-  #                                      n.age.cats.m - 2)))
-  
   M[row(M) == (col(M) + 1)] <- c(juv.an.sur * (1 - hunt.mort.juv.f),
-                                   rep(ad.an.f.sur *  (1 - hunt.mort.ad.f),
-                                      n.age.cats.f - 2), 0, ## females(15 age classes)
-                                 0.6057, 0.312, 0.3765, 0.4601, 0.4654, 0.5142, 
-                                 0.4863, 0.3899, 0.4094) ## Males(10 age classes)
+                                 rep(ad.an.f.sur *  (1 - hunt.mort.ad.f),
+                                     n.age.cats.f - 2), 0,
+                                 c(juv.an.sur * (1 - hunt.mort.juv.m),
+                                   rep(ad.an.m.sur * (1 - hunt.mort.ad.m),
+                                       n.age.cats.m - 2)))
+  
+  # M[row(M) == (col(M) + 1)] <- c(juv.an.sur * (1 - hunt.mort.juv.f),
+  #                                  rep(ad.an.f.sur *  (1 - hunt.mort.ad.f),
+  #                                     n.age.cats.f - 2), 0, ## females(15 age classes)
+  #                                0.6057, 0.312, 0.3765, 0.4601, 0.4654, 0.5142, 
+  #                                0.4863, 0.3899, 0.4094) ## Males(10 age classes)
   ## Buck survival values come from Nick
   # "These values come from an age-based reconstruction model.
   # They are annual survival rates, accounting for all sources of mortality."
@@ -530,7 +530,7 @@ cwd_stoch_model <- function(params) {
       I_adults <- sum(It.f[3:n.age.cats.f, t - 1, ])
 
       fawns_born <- rbinom(1, (St.f[2, t - 1] + I_juv), juv.preg.draw) *2  +
-        rbinom(1, (sum(St.f[3:n.age.cats, t - 1]) + I_adults), ad.preg.draw) *2 
+        rbinom(1, (sum(St.f[3:n.age.cats.f, t - 1]) + I_adults), ad.preg.draw) *2 
 
       St.f[1, t] <- rbinom(1, fawns_born, 0.5)
       St.m[1, t] <- fawns_born - St.f[1, t]
@@ -591,7 +591,7 @@ cwd_stoch_model <- function(params) {
       hunted.i.f[which(is.na(hunted.i.f))] <- 0
       hunted.i.m[which(is.na(hunted.i.m))] <- 0
 
-      hunted.i.f[Iall.f < hunted.i.f] <- Iall.f[Iall.f < hunted.i.f]
+      hunted.i.f[Iall.f < hunted.i.f] <- Iall.f[Iall.f < hunted.i.f] 
       hunted.i.m[Iall.m < hunted.i.m] <- Iall.m[Iall.m < hunted.i.m]
 
       # subtracting out those hunted in the S class
@@ -627,9 +627,19 @@ cwd_stoch_model <- function(params) {
     # Nall <- sum(St.f[, t] + St.m[, t]) + Iall
     
     ### Need to subset to add and then recombine? Might have been a better way to do this 
-    Iall <- sum(It.f[1:10, t, ] + It.m[, t, ]) + sum(It.f[11:15, t, ])
-    Nall <- sum(St.f[1:10, t] + St.m[, t]) +  sum(St.f[11:15, t])  + Iall
-
+    # Making indexing dynamic for varying age class senarios 
+    # Note, females must be greater than or equal to number of male age classes
+    if(n.age.cats.m == n.age.cats.f){
+      Iall <- sum(It.f[, t, ] + It.m[, t, ])
+      Nall <- sum(St.f[, t] + St.m[, t]) + Iall
+    } else if(n.age.cats.f - n.age.cats.m == 1){
+      Iall <- sum(It.f[1:n.age.cats.m, t, ] + It.m[, t, ]) + sum(It.f[(n.age.cats.m+1), t, ])
+      Nall <- sum(St.f[1:n.age.cats.m, t] + St.m[, t]) +  sum(St.f[(n.age.cats.m+1), t])  + Iall
+    } else if(n.age.cats.f - n.age.cats.m > 1){
+      Iall <- sum(It.f[1:n.age.cats.m, t, ] + It.m[, t, ]) + sum(It.f[(n.age.cats.m+1):n.age.cats.f, t, ])
+      Nall <- sum(St.f[1:n.age.cats.m, t] + St.m[, t]) +  sum(St.f[(n.age.cats.m+1):n.age.cats.f, t])  + Iall
+    }
+    
     foi.f <- 1 - exp(-beta.f * Iall/Nall^theta)
     foi.m <- 1 - exp(-beta.m * Iall/Nall^theta)
 
@@ -680,31 +690,3 @@ cwd_stoch_model <- function(params) {
   output <- list(counts = counts.long, deaths = deaths.long, f.R0 = f.R0, 
                  m.R0 = m.R0)
 }
-
-
-### Sex ratio - !!! This is too low... starts off high, but why is it dropping back down??
-# sexratio <- counts.long %>% 
-#   group_by(month, year) %>% 
-#   dplyr::select(-c(category, age, disease)) %>% 
-#   pivot_wider(names_from = c(sex), values_from = population, values_fn = ~sum(.x, na.rm = TRUE)) %>% 
-#   mutate(sexratio = f/m)
-# 
-# entirepop  <- sexratio %>% 
-#   mutate(wholepop = f + m)
-# plot(entirepop$year, entirepop$wholepop)
-
-### Doe: Fawn (pre & post hunt) - 
-
-# doe_fawn_ratio <- counts.long %>% 
-#   mutate(IDfawn = case_when(age == 1 ~ "fawns", age != 1 ~  "notfawn")) %>% 
-#   filter(!(sex == "m" & IDfawn == "notfawn")) %>% 
-#   dplyr::select(-c(category, age, sex, disease)) %>% 
-#   pivot_wider(names_from = c(IDfawn), values_from = population, values_fn = ~sum(.x, na.rm = TRUE)) %>% 
-#   mutate(sexratio = fawns/notfawn)
-# pre/post hunt months?
-  
-
-### Reproduction rate - different from doe:fawn ratio? 
-
-### Density (unsure how to calculate this - what is the area?)
-

@@ -315,6 +315,10 @@ cwd_stoch_model <- function(params) {
   }
   #note - model doesn't have fawn reproduction. 
   
+  if(exists("WSI")==FALSE){
+    message("WSI is missing, using default value")
+    ad.repro.var <- 0 # defaults to "off"
+  }
   
   
   ###### check parameter values ###
@@ -369,6 +373,10 @@ cwd_stoch_model <- function(params) {
   months <- seq(1, n.years * 12)  # monthly timestep
   hunt.mo <- rep(0, n.years * 12)  # months in where the hunt occurs
   hunt.mo[months%%12 == 7] <- 1  # hunt.mo==1 on Nov
+  
+  ### Set up WSI
+  WSI.mo <- rep(0, n.years * 12)
+  WSI.mo[months%%12 == 8 | months%%12 == 9 | months%%12 == 10 | months%%12 == 11] <- 1  # hunt.mo==1 on Dec:March
 
   # Estimate shape and scale parameters for the Beta distribution given the user
   # input of mean and variance.  natural survival
@@ -485,17 +493,50 @@ cwd_stoch_model <- function(params) {
   
   ####### POPULATION MODEL############
   for (t in 2:(n.years * 12)) {
-
+    
     # Annual Parameter Draws monthly stochastic survival rates
-    fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)
-    juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)
-    ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)
-    ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)
+    ## These have moved to WSI if statement 
+    # fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)
+    # juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)
+    # ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)
+    # ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)
 
     # monthly stochastic reproductive rates
     juv.preg.draw <- rbeta(1, juv.r.b$alpha, juv.r.b$beta, ncp = 0)
     ad.preg.draw <- rbeta(1, ad.r.b$alpha, ad.r.b$beta, ncp = 0)
 
+    ## See if WSI is happening
+    if (WSI == 1){ ## Check to see if WSI is turned on in params
+      if (t%%12 == 2) { # In december, draw from binomial to see if winter will be sever
+        WSI_draw <- rbinom(1, size = 1, prob = .5)
+      }
+    } 
+
+    ## If it is, redo survival parameters.. 
+  if(WSI_draw == 1){
+    if (WSI.mo[t] == 1) {
+      fawn.s.b <- est_beta_params(fawn.an.sur*.9, fawn.sur.var)
+      juv.s.b <- est_beta_params(juv.an.sur*.9, juv.sur.var)
+      ad.f.s.b <- est_beta_params(ad.an.f.sur*.9, ad.f.sur.var)
+      ad.m.s.b <- est_beta_params(ad.an.m.sur*.9, ad.m.sur.var)
+      
+      fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)
+      juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)
+      ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)
+      ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)
+    } else{
+      fawn.s.b <- est_beta_params(fawn.an.sur, fawn.sur.var)
+      juv.s.b <- est_beta_params(juv.an.sur, juv.sur.var)
+      ad.f.s.b <- est_beta_params(ad.an.f.sur, ad.f.sur.var)
+      ad.m.s.b <- est_beta_params(ad.an.m.sur, ad.m.sur.var)
+      
+      fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)
+      juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)
+      ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)
+      ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)
+    }
+  }
+    
     # group into a vector
     Sur.f <- c(fawn.sur.draw, juv.sur.draw, rep(ad.f.sur.draw, n.age.cats.f - 2))
     Sur.m <- c(fawn.sur.draw, juv.sur.draw, rep(ad.m.sur.draw, n.age.cats.m - 2))
@@ -602,6 +643,7 @@ cwd_stoch_model <- function(params) {
       It.f[, t, ] <- allocate_deaths(hunted.i.f, It.f[, t, ])
       It.m[, t, ] <- allocate_deaths(hunted.i.m, It.m[, t, ])
     }
+    
 
     # Disease mortality stochastic movement of individuals from I1 to I2 disease
     # induced mortality here by advancing all I's and only a proportion of the 10th

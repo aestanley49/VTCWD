@@ -317,7 +317,7 @@ cwd_stoch_model <- function(params) {
   
   if(exists("WSI")==FALSE){
     message("WSI is missing, using default value")
-    ad.repro.var <- 0 # defaults to "off"
+    WSI <- 0 # defaults to "off"
   }
   
   
@@ -495,11 +495,11 @@ cwd_stoch_model <- function(params) {
   for (t in 2:(n.years * 12)) {
     
     # Annual Parameter Draws monthly stochastic survival rates
-    ## These have moved to WSI if statement 
-    # fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)
-    # juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)
-    # ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)
-    # ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)
+    # These have UN moved from WSI if statement
+    fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)
+    juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)
+    ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)
+    ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)
 
     # monthly stochastic reproductive rates
     juv.preg.draw <- rbeta(1, juv.r.b$alpha, juv.r.b$beta, ncp = 0)
@@ -508,34 +508,30 @@ cwd_stoch_model <- function(params) {
     ## See if WSI is happening
     if (WSI == 1){ ## Check to see if WSI is turned on in params
       if (t%%12 == 2) { # In december, draw from binomial to see if winter will be sever
-        WSI_draw <- rbinom(1, size = 1, prob = .5)
+        WSI_draw <- rbinom(1, size = 1, prob = .25)
       }
-    } 
+    } else{
+      WSI_draw = 0
+    }
 
     ## If it is, redo survival parameters.. 
   if(WSI_draw == 1){
     if (WSI.mo[t] == 1) {
-      fawn.s.b <- est_beta_params(fawn.an.sur*.9, fawn.sur.var)
-      juv.s.b <- est_beta_params(juv.an.sur*.9, juv.sur.var)
-      ad.f.s.b <- est_beta_params(ad.an.f.sur*.9, ad.f.sur.var)
-      ad.m.s.b <- est_beta_params(ad.an.m.sur*.9, ad.m.sur.var)
+
+      fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)*.95
+      juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)*.95
+      ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)*.95
+      ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)*.95
       
-      fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)
-      juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)
-      ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)
-      ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)
     } else{
-      fawn.s.b <- est_beta_params(fawn.an.sur, fawn.sur.var)
-      juv.s.b <- est_beta_params(juv.an.sur, juv.sur.var)
-      ad.f.s.b <- est_beta_params(ad.an.f.sur, ad.f.sur.var)
-      ad.m.s.b <- est_beta_params(ad.an.m.sur, ad.m.sur.var)
-      
+
       fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)
       juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)
       ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)
       ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)
     }
   }
+    
     
     # group into a vector
     Sur.f <- c(fawn.sur.draw, juv.sur.draw, rep(ad.f.sur.draw, n.age.cats.f - 2))
@@ -599,6 +595,7 @@ cwd_stoch_model <- function(params) {
     nat.i.m <- matrix(rbinom(length(It.m[, t, ]), size = It.m[, t, ],
                              prob = (1 - Sur.m)), nrow = n.age.cats.m)
 
+    
     It.f[, t, ] <- It.f[, t, ] - nat.i.f
     It.m[, t, ] <- It.m[, t, ] - nat.i.m
 

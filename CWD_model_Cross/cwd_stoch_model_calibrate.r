@@ -508,7 +508,7 @@ cwd_stoch_model <- function(params) {
     ## See if WSI is happening
     if (WSI == 1){ ## Check to see if WSI is turned on in params
       if (t%%12 == 2) { # In december, draw from binomial to see if winter will be sever
-        WSI_draw <- rbinom(1, size = 1, prob = .25)
+        WSI_draw <- rbinom(1, size = 1, prob = 0.125)
       }
     } else{
       WSI_draw = 0
@@ -518,10 +518,10 @@ cwd_stoch_model <- function(params) {
     if(WSI_draw == 1){
       if (WSI.mo[t] == 1) {
         
-        fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)*.9
-        juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)*.95
-        ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)
-        ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)
+        fawn.sur.draw <- rbeta(1, fawn.s.b$alpha, fawn.s.b$beta, ncp = 0)^(1/12)*.83
+        juv.sur.draw <- rbeta(1, juv.s.b$alpha, juv.s.b$beta, ncp = 0)^(1/12)*.87
+        ad.f.sur.draw <- rbeta(1, ad.f.s.b$alpha, ad.f.s.b$beta, ncp = 0)^(1/12)*.96
+        ad.m.sur.draw <- rbeta(1, ad.m.s.b$alpha, ad.m.s.b$beta, ncp = 0)^(1/12)*.96
         
       } else{
         
@@ -567,7 +567,7 @@ cwd_stoch_model <- function(params) {
       I_adults <- sum(It.f[3:n.age.cats.f, t - 1, ])
       
       fawns_born <- rbinom(1, (St.f[2, t - 1] + I_juv), juv.preg.draw) *2  +
-        rbinom(1, (sum(St.f[3:10, t - 1]) + I_adults), ad.preg.draw) *2 
+        rbinom(1, (sum(St.f[3:12, t - 1]) + I_adults), ad.preg.draw) *2 
       
       St.f[1, t] <- rbinom(1, fawns_born, 0.5)
       St.m[1, t] <- fawns_born - St.f[1, t]
@@ -615,6 +615,31 @@ cwd_stoch_model <- function(params) {
       
       Ht.m[, t] <- rbinom(n.age.cats.m, Nt.m, c(hunt.fawn.draw, hunt.juv.m.draw,
                                                 hunt.m.draw))
+      
+      ### Temp patch - shouldn't harvest lots of fawns..
+      # This isn't working..
+      # while(Ht.f[1, t] > 5000 | Ht.m[1, t] > 5000){ #If harvesting too many fawns, redraw harvest numbers
+      #   Ht.f[, t] <- rbinom(n.age.cats.f, Nt.f, c(hunt.fawn.draw, hunt.juv.f.draw,
+      #                                             hunt.f.draw))
+      #   Ht.m[, t] <- rbinom(n.age.cats.m, Nt.m, c(hunt.fawn.draw, hunt.juv.m.draw,
+      #                                             hunt.m.draw))
+      #   if (Ht.f[1, t] < 5000 & Ht.m[1, t] < 5000){
+      #     break
+      #   } 
+      # } 
+      
+      if (Ht.f[1, t] > 5000 | Ht.m[1, t] > 5000){ #If harvesting too many fawns, redraw harvest numbers
+        Ht.f[, t] <- rbinom(n.age.cats.f, Nt.f, c(hunt.fawn.draw, hunt.juv.f.draw,
+                                                  hunt.f.draw))
+        Ht.m[, t] <- rbinom(n.age.cats.m, Nt.m, c(hunt.fawn.draw, hunt.juv.m.draw,
+                                                  hunt.m.draw))
+        if (Ht.f[1, t] > 5000 | Ht.m[1, t] > 5000){
+          Ht.f[, t] <- rbinom(n.age.cats.f, Nt.f, c(hunt.fawn.draw, hunt.juv.f.draw,
+                                                    hunt.f.draw))
+          Ht.m[, t] <- rbinom(n.age.cats.m, Nt.m, c(hunt.fawn.draw, hunt.juv.m.draw,
+                                                    hunt.m.draw))
+        } 
+      } 
       
       # those hunted in the I class overall based on the total hunted, the total that
       # are susceptible/infected and the relative hunting risk of S v. I can result in

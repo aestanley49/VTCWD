@@ -6,7 +6,7 @@
 # currently set up so that have arrival for as long as model is running but 
 #   if need to project out, might need to change this.. 
 
-arrival_input <- c(0,0,0,0,0,0,.5, 1.3, 2.8, 5.4) # 10 years.. 
+arrival_input <- c(1,1,1,1,1,1,5, 1, 8, 14) # 10 years.. 
 # change to monthly by repeating each value 12 times.
 arrival <- c()
 for(i in arrival_input){
@@ -14,6 +14,16 @@ for(i in arrival_input){
   arrival <- c(arrival, x)
 }
 
+# Indicator variable to turn surveillance programs on and off 
+Hunterharvest <- 1
+taxidermistprogram <- 0
+
+# number of individuals sampled is determined by strategy 
+statquosamp <- 5
+prv2.5_90samp <- 125
+nosampled <- statquosamp
+
+huntingactions <- 1
 
 #' CWD stochastic model function
 #'
@@ -223,19 +233,19 @@ cwd_stoch_model <- function(params) {
   }
   if(exists("ini.fawn.prev")==FALSE){
     message("initial fawn prevalence is missing, using default value")
-    ini.fawn.prev <- 0.0
+    ini.fawn.prev <- 0.01
   }
   if(exists("ini.juv.prev")==FALSE){
     message("initial juvenile prevalence is missing, using default value")
-    ini.juv.prev <- 0.0
+    ini.juv.prev <- 0.03
   }
   if(exists("ini.ad.f.prev")==FALSE){
     message("initial adult female prevalence is missing, using default value")
-    ini.ad.f.prev <- 0.0
+    ini.ad.f.prev <- 0.04
   }
   if(exists("ini.ad.m.prev")==FALSE){
     message("initial adult male prevalence is missing, using default value")
-    ini.ad.m.prev <- 0.0
+    ini.ad.m.prev <- 0.04
   }
   if(exists("n.age.cats")==FALSE){
     message("# of age categories is missing, using default value")
@@ -297,6 +307,33 @@ cwd_stoch_model <- function(params) {
     message("hunt.var is missing, using default value")
     hunt.var <- 0.005
   }
+  
+  ### Adding additional variance parameters here.. ###
+  ## survival
+  if(exists("juv.sur.var")==FALSE){
+    message("juv.sur.var is missing, using default value")
+    juv.sur.var <- 0.005
+  }
+  if(exists("ad.f.sur.var")==FALSE){
+    message("ad.f.sur.var is missing, using default value")
+    ad.f.sur.var <- 0.005
+  }
+  if(exists("ad.m.sur.var")==FALSE){
+    message("ad.m.sur.var is missing, using default value")
+    ad.m.sur.var <- 0.005
+  }
+  ## reproduction
+  if(exists("juv.repro.var")==FALSE){
+    message("juv.repro.var is missing, using default value")
+    juv.repro.var <- 0.005
+  }
+  if(exists("ad.repro.var")==FALSE){
+    message("ad.repro.var is missing, using default value")
+    ad.repro.var <- 0.005
+  }
+  #note - model doesn't have fawn reproduction. 
+  
+  
   ###### check parameter values ###
   if(fawn.an.sur < 0) warning("fawn survival must be positive")
   if(fawn.an.sur > 1) warning("fawn survival must be < 1")
@@ -353,13 +390,13 @@ cwd_stoch_model <- function(params) {
   # Estimate shape and scale parameters for the Beta distribution given the user
   # input of mean and variance.  natural survival
   fawn.s.b <- est_beta_params(fawn.an.sur, fawn.sur.var)
-  juv.s.b <- est_beta_params(juv.an.sur, sur.var)
-  ad.f.s.b <- est_beta_params(ad.an.f.sur, sur.var)
-  ad.m.s.b <- est_beta_params(ad.an.m.sur, sur.var)
+  juv.s.b <- est_beta_params(juv.an.sur, juv.sur.var)
+  ad.f.s.b <- est_beta_params(ad.an.f.sur, ad.f.sur.var)
+  ad.m.s.b <- est_beta_params(ad.an.m.sur, ad.m.sur.var)
   
   # reproduction
-  juv.r.b <- est_beta_params(juv.repro/2, repro.var)
-  ad.r.b <- est_beta_params(ad.repro/2, repro.var)
+  juv.r.b <- est_beta_params(juv.repro/2, juv.repro.var)
+  ad.r.b <- est_beta_params(ad.repro/2, ad.repro.var)
   
   # hunting
   hunt.fawn.b <- est_beta_params(hunt.mort.fawn, hunt.var)
@@ -367,20 +404,6 @@ cwd_stoch_model <- function(params) {
   hunt.juv.m.b <- est_beta_params(hunt.mort.juv.m, hunt.var)
   hunt.f.b <- est_beta_params(hunt.mort.ad.f, hunt.var)
   hunt.m.b <- est_beta_params(hunt.mort.ad.m, hunt.var)
-  
-  # group into a vector
-  # initial female prevalence
-  ini.f.prev <- c(ini.fawn.prev, ini.juv.prev,
-                  rep(ini.ad.f.prev, (n.age.cats - 2)))
-  # initial male prevalence
-  ini.m.prev <- c(ini.fawn.prev, ini.juv.prev,
-                  rep(ini.ad.m.prev, (n.age.cats - 2)))
-  
-  ## These are based on arrival vector..
-  if(arrival[1] != 0){ #even split between males and females 
-    ini.f.prev <- round(arrival[1]/2) # need a whole number of individuals
-    ini.m.prev <- round(arrival[1]/2) # need a whole number of individuals
-  } ## if arrival[1] is 0.. do nothing
   
   
   # Create the Leslie Matrix to start the population at stable age dist
@@ -421,22 +444,81 @@ cwd_stoch_model <- function(params) {
   CWDt.f <- tmp
   CWDt.m <- tmp
   
-  # Intializing with the stable age distribution.
-  St.f[, 1] <- round(popbio::stable.stage(M)[1:n.age.cats] * n0 * (1 - ini.f.prev))
-  St.m[, 1] <- round(popbio::stable.stage(M)[(n.age.cats + 1):(n.age.cats * 2)] *
-                       n0 * (1 - ini.m.prev))
+  # tracking samples
+  Samp.f <- tmp
+  Samp.m <- tmp
+  I.Samp.f <- tmp
+  I.Samp.m <- tmp
+  
+  # Sharpshooters..
+  Sharp.f <- tmp
+  Sharp.m <- tmp
+  
+  # group into a vector
+  # initial female prevalence
+  ini.f.prev <- c(ini.fawn.prev, ini.juv.prev,
+                  rep(ini.ad.f.prev, (n.age.cats - 2)))
+  # initial male prevalence
+  ini.m.prev <- c(ini.fawn.prev, ini.juv.prev,
+                  rep(ini.ad.m.prev, (n.age.cats - 2)))
+  
+  ## These are based on arrival vector..
+  if(arrival[1] == 0){ #even split between males and females 
+    set.ini.f.prev <- rep(0, n.age.cats)
+    set.ini.m.prev <- rep(0, n.age.cats)
+    
+    # randomly allocating infecteds across ages and categories.
+    It.f[, 1, 1:10] <- rbinom(n.age.cats * 10, round(popbio::stable.stage(M)[1:n.age.cats] *
+                                                       n0/10), set.ini.m.prev)
+    It.m[, 1, 1:10] <- rbinom(n.age.cats * 10, round(popbio::stable.stage(M)
+                                                     [(n.age.cats + 1):(n.age.cats * 2)] *
+                                                       n0/10), set.ini.m.prev)
+    
+    # Intializing with the stable age distribution.
+    St.f[, 1] <- round(popbio::stable.stage(M)[1:n.age.cats] * n0 * (1 - set.ini.f.prev))
+    St.m[, 1] <- round(popbio::stable.stage(M)[(n.age.cats + 1):(n.age.cats * 2)] *
+                         n0 * (1 - set.ini.m.prev))
+    
+  } else{ #even split between males and females 
+    split <- as.vector(table(sample(1:2, size = arrival[1], replace = T)))
+    if(length(split) == 1){ split[2] <- 0} # otherwise have issues
+    
+    new.inf.f <- as.vector(rmultinom(1, size = split[1], prob = ini.f.prev))
+    new.inf.m <- as.vector(rmultinom(1, size = split[2], prob = ini.m.prev))
+    
+    ### randomly allocating infecteds across ages and categories.
+    random_allocation.f <- matrix(0, nrow = length(new.inf.f), ncol = 10)
+    for(j in 1:nrow(as.matrix(new.inf.f))){
+      col_index <- sample(1:10, 1)  # randomly choose column index
+      random_allocation.f[j, col_index] <- random_allocation.f[j, col_index] + new.inf.f[j]  # add the value to the chosen column
+    }
+    
+    random_allocation.m <- matrix(0, nrow = length(new.inf.m), ncol = 10)
+    for(j in 1:nrow(as.matrix(new.inf.m))){
+      col_index <- sample(1:10, 1)  # randomly choose column index
+      random_allocation.m[j, col_index] <- random_allocation.m[j, col_index] + new.inf.m[j]  # add the value to the chosen column
+    }
+    
+    It.f[, 1, 1:10] <- random_allocation.f
+    It.m[, 1, 1:10] <- random_allocation.m
+    
+    ### None effected popn
+    
+    set.ini.f.prev <- new.inf.f/n0
+    set.ini.m.prev <- new.inf.m/n0
+    
+    # Intializing with the stable age distribution.
+    St.f[, 1] <- round(popbio::stable.stage(M)[1:n.age.cats] * n0 * (1 - set.ini.f.prev))
+    St.m[, 1] <- round(popbio::stable.stage(M)[(n.age.cats + 1):(n.age.cats * 2)] *
+                         n0 * (1 - set.ini.m.prev))
+
+  } 
+  
   
   if(sum(St.f[,1]) <= 0) {
     warning("These parameters result in a stable age structure with no surviving 
             females.")
   } 
-  
-  # randomly allocating infecteds across ages and categories.
-  It.f[, 1, 1:10] <- rbinom(n.age.cats * 10, round(popbio::stable.stage(M)[1:n.age.cats] *
-                                                     n0/10), ini.f.prev)
-  It.m[, 1, 1:10] <- rbinom(n.age.cats * 10, round(popbio::stable.stage(M)
-                                                   [(n.age.cats + 1):(n.age.cats * 2)] *
-                                                     n0/10), ini.m.prev)
   
   # calculate R0s for adult females and males
   # in the denominator find the average minimum survival for the 3 mortality types
@@ -572,6 +654,113 @@ cwd_stoch_model <- function(params) {
       # allocate those deaths across the 10 I categories
       It.f[, t, ] <- allocate_deaths(hunted.i.f, It.f[, t, ])
       It.m[, t, ] <- allocate_deaths(hunted.i.m, It.m[, t, ])
+      
+      
+      ### Surveillance starts here.. 
+      # bio check 10% or less of total harvest - randomly select 10% of available harvest
+      # no. individuals available for sampling
+      samp <- (sum(Ht.f[, t]) + sum(Ht.m[, t]))*.1
+      # split males/females 50/50?
+      samp.f <- round(samp*.5)
+      samp.m <- round(samp*.5)
+      
+      # randomly draw samples
+      Samp.f[,t ] <- randomsampling(matrix = Ht.f[, t], target_sum = samp.f, emptysample = Samp.f[,t ])
+      Samp.m[,t ] <- randomsampling(matrix = Ht.m[, t], target_sum = samp.m, emptysample = Samp.m[,t ])
+      
+      # see how many of the samples have infected individuals..
+      I.Samp.f <- infectedSamples(sample = Samp.f[,t ], infected = hunted.i.f, 
+                                  removed = Ht.f[, t], trackInfect = I.Samp.f)
+      I.Samp.m <- infectedSamples(sample = Samp.m[,t ], infected = hunted.i.m, 
+                                  removed = Ht.m[, t], trackInfect = I.Samp.m)
+      
+      ## Check to see if found any infected individuals
+      infect <- sum(I.Samp.f) + sum(I.Samp.m)
+      
+      ## !!! IF find infected individual then 
+      
+      if(infect != 0){
+        if(huntingactions == 1){ ## Not doing this for every strategy
+          ### Expand/liberalize hunting season = increase hunting mort in all age classes/categories
+          # hunt.fawn.b <- est_beta_params(hunt.mort.fawn*1.05, hunt.var)
+          # hunt.juv.f.b <- est_beta_params(hunt.mort.juv.f*1.05, hunt.var)
+          # # hunt.juv.m.b <- est_beta_params(hunt.mort.juv.m*1.05, hunt.var)
+          # hunt.f.b <- est_beta_params(hunt.mort.ad.f*1.05, hunt.var)
+          # hunt.m.b <- est_beta_params(hunt.mort.ad.m*1.05, hunt.var)
+          
+          ### Target yearling bucks to reduce density demography [8 - 10%]
+          hunt.juv.m.b <- est_beta_params(hunt.mort.juv.m*1.1, hunt.var)
+          
+          ### Targeted removal 
+          # Increase odds that hunters will remove infected individuals 
+          rel.risk <- 1.5 ## No clue what to change this to
+          
+          ### Sharp shooting
+          if (hunt.mo[t] == 1) { # only doing this once a year, not every month
+            # Pull 300 per year until population drops to 5 deer/square mile 
+            # In the simulation that would be ?? 
+            # According to spreadsheet, target is approximately 15/square mile
+            # Assuming we have that with calibration
+            # would stop pulling when reduce population by 2/3s 
+            
+            stopvalue <- (sum(It.f[, 2, ] + It.m[, 2, ]) + sum(St.f[, 2] + St.m[, 2]))*1/3
+            #stopvalue = starting popn * 1/3 (note assume don't have a burn in, if so change from 2)
+            
+            currentvalue <- (sum(It.f[, t, ] + It.m[, t, ]) + sum(St.f[, t] + St.m[, t]))
+            
+            if(currentvalue > stopvalue){
+              checksize = currentvalue - stopvalue
+              if(checksize > 300){
+                setsize = 300
+              } else{
+                setsize = checksize
+              }
+              ## Need to pull 300 individuals but this should be random?
+              ## Can repurpose code used to pull hunting
+              
+              #What should the split between males and females be? 
+              split <- as.vector(table(sample(1:2, size = setsize, replace = T)))
+              
+              Sharp.f[, t] <- rbinom(n.age.cats, split[1], c(rep(1/n.age.cats, n.age.cats)))
+              Sharp.m[, t] <- rbinom(n.age.cats, split[2], c(rep(1/n.age.cats, n.age.cats)))
+              
+              # those hunted in the I class overall based on the total hunted, the total that
+              # are susceptible/infected and the relative hunting risk of S v. I can result in
+              # a divide by 0 and NA.  this can also result in more hunting of a category than
+              # are available.
+              
+              Sharped.i.f <- round((rel.risk * Iall.f * Sharp.f[, t]) /
+                                    (St.f[, t] + rel.risk * Iall.f))
+              Sharped.i.m <- round((rel.risk * Iall.m * Sharp.m[, t]) /
+                                    (St.m[, t] + rel.risk * Iall.m))
+              
+              Sharped.i.f[which(is.na(Sharped.i.f))] <- 0
+              Sharped.i.m[which(is.na(Sharped.i.m))] <- 0
+              
+              ### Can't remove negative individuals
+              Sharped.i.f[which(Sharped.i.f<0)] <- 0
+              Sharped.i.m[which(Sharped.i.m<0)] <- 0
+              
+              Sharped.i.f[Iall.f < Sharped.i.f] <- Iall.f[Iall.f < Sharped.i.f]
+              Sharped.i.m[Iall.m < Sharped.i.m] <- Iall.m[Iall.m < Sharped.i.m]
+              
+              # subtracting out those removed by sharpshooters in the S class
+              St.f[, t] <- St.f[, t] - (Sharp.f[, t] - Sharped.i.f)
+              St.m[, t] <- St.m[, t] - (Sharp.m[, t] - Sharped.i.m)
+              
+              # allocate those deaths across the 10 I categories
+              It.f[, t, ] <- allocate_deaths(Sharped.i.f, It.f[, t, ])
+              It.m[, t, ] <- allocate_deaths(Sharped.i.m, It.m[, t, ])
+              
+              
+            }
+          } 
+          
+          ### Breakup winter aggregation with harassment = reduce transmission by 25%
+          ## **** Note this is only 2 strategies - include? Makes life harder..
+          beta.f = beta.f*.75 ; beta.m = beta.m*.75
+        }
+      }
     }
     
     # Disease mortality stochastic movement of individuals from I1 to I2 disease
@@ -610,9 +799,19 @@ cwd_stoch_model <- function(params) {
     # from transmission
     It.f[, t, 1] <- transmission.f + It.f[, t, 1]
     It.m[, t, 1] <- transmission.m + It.m[, t, 1] 
-    # from individuals arriving from out of state
-    It.f[1, t, 1] <- round(arrival[t]/2)
-    It.m[1, t, 1] <- round(arrival[t]/2)
+    
+    ### from individuals arriving from out of state
+    split <- as.vector(table(sample(1:2, size = arrival[t], replace = T)))
+    ### Need to make this conditional or get error when nothing new to add
+    if(sum(split) != 0){
+      if(length(split) == 1){ split[2] <- 0} # otherwise have issues
+
+      ## Need to divide each split number into ago categories
+      new.inf.f <- as.vector(rmultinom(1, size = split[1], prob = ini.f.prev))
+      new.inf.m <- as.vector(rmultinom(1, size = split[2], prob = ini.m.prev))
+      It.f[, t, 1] <- new.inf.f
+      It.m[, t, 1] <- new.inf.m
+    }
     
     # Environmental transmission happens last
     envcases.f <- rbinom(n.age.cats, St.f[, t], env.foi)
@@ -637,6 +836,11 @@ cwd_stoch_model <- function(params) {
   deaths <- list(Ht.f = Ht.f, Ht.m = Ht.m, Dt.f = Dt.f, Dt.m = Dt.m, CWDt.f = CWDt.f,
                  CWDt.m = CWDt.m)
   
+  mysurveillance <- list(I.Samp.f = I.Samp.f, I.Samp.m = I.Samp.m)
+  
+  sharpshooting <- list(Sharp.f = Sharp.f, Sharp.m = Sharp.m)
+  
+  
   # convert the output to long form
   counts.long <- melt(counts) %>%
     dplyr::rename(age = Var1, month = Var2, population = value, category = L1) %>%
@@ -648,12 +852,36 @@ cwd_stoch_model <- function(params) {
     dplyr::rename(age = Var1, month = Var2, population = value, category = L1) %>%
     mutate(year = (month - 1)/12, sex = as.factor(str_sub(category, - 1)))
   
-  output <- list(counts = counts.long, deaths = deaths.long, f.R0 = f.R0, 
-                 m.R0 = m.R0)
+  mysurveillance.long <- melt(mysurveillance) %>%
+    dplyr::rename(age = Var1, month = Var2, population = value, category = L1) %>%
+    mutate(year = (month - 1)/12, sex = as.factor(str_sub(category, - 1)))
+  
+  sharpshooting.long <- melt(sharpshooting) %>%
+    dplyr::rename(age = Var1, month = Var2, population = value, category = L1) %>%
+    mutate(year = (month - 1)/12, sex = as.factor(str_sub(category, - 1)))
+  
+  
+  output <- list(counts = counts.long, deaths = deaths.long, survillance = mysurveillance.long,
+                 sharpshooting = sharpshooting.long, f.R0 = f.R0, m.R0 = m.R0)
 }
 
+base_count_popn <- counts.long %>% 
+  group_by(year, month) %>% 
+  summarise(count = sum(population))
+
 prev <- counts.long %>% 
-  mutate(rounyear = round(year, 0)) %>% 
-  filter(disease == "yes" & population == 1) %>% 
-  group_by(rounyear, sex, age) %>% 
-  summarise(count = n())
+  filter(disease == "yes" & population >= 1) %>% 
+  group_by(year, month) %>% 
+  summarise(trueprev_count = n())
+
+detected_prev <- mysurveillance.long %>% 
+  filter(population > 0) %>% 
+  group_by(year, month) %>% 
+  summarise(detectedprev_count = n())
+
+sum_prev <- base_count_popn %>% 
+  full_join(prev, by = c("year", "month")) %>% 
+  full_join(detected_prev, by = c("year", "month")) %>% 
+  mutate(prop_true_prev = trueprev_count/count) %>% 
+  mutate(prop_detected_prev = detectedprev_count/count)
+  

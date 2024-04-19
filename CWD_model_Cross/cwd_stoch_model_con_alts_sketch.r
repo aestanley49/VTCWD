@@ -6,22 +6,14 @@
 # currently set up so that have arrival for as long as model is running but 
 #   if need to project out, might need to change this.. 
 
-arrival_input <- c(1,1,1,1,1,1,5, 1, 8, 14) # 10 years.. 
-# change to monthly by repeating each value 12 times.
-arrival <- c()
-for(i in arrival_input){
-  x <- c(i, rep(0, 11))
-  arrival <- c(arrival, x)
-}
-
-# Indicator variable to turn surveillance programs on and off 
-Hunterharvest <- 1
-taxidermistprogram <- 0
+arrival_input <- c(100,100,1,1,1,1,5, 1, 8, 14) # 10 years.. 
 
 # number of individuals sampled is determined by strategy 
-statquosamp <- 5
-prv2.5_90samp <- 125
-nosampled <- statquosamp
+# statquosamp <- 5
+# prv2.5_90samp <- 125
+# nosampled <- statquosamp
+# prv1_99samp <- 460
+# prv1_90samp <- 230
 
 huntingactions <- 1
 
@@ -278,7 +270,7 @@ cwd_stoch_model <- function(params) {
   
   if(exists("n0")==FALSE){
     message("initial population size n0 is missing, using default value")
-    n0 <- 1000
+    n0 <- 10000
   }
   
   if(exists("n.years")==FALSE){
@@ -332,6 +324,23 @@ cwd_stoch_model <- function(params) {
     ad.repro.var <- 0.005
   }
   #note - model doesn't have fawn reproduction. 
+  
+  ### New action params
+  
+  if(exists("nosampled")==FALSE){
+    message("nosampled is missing, using default value")
+    nosampled <- 100 ## Status Quo value
+  }
+  
+  if(exists("arrival_input")==FALSE){
+    message("arrival_input is missing, using default value")
+    arrival_input <- c(0,0,0,0,0,0,0, 0, 0, 0)
+  }  
+  
+  if(exists("huntingactions")==FALSE){
+    message("huntingactions is missing, using default value")
+    huntingactions <- 0 #hunting actions are turned off
+  }
   
   
   ###### check parameter values ###
@@ -454,6 +463,12 @@ cwd_stoch_model <- function(params) {
   Sharp.f <- tmp
   Sharp.m <- tmp
   
+  arrival <- c()
+  for(i in arrival_input){
+    x <- c(i, rep(0, 11))
+    arrival <- c(arrival, x)
+  }
+  
   # group into a vector
   # initial female prevalence
   ini.f.prev <- c(ini.fawn.prev, ini.juv.prev,
@@ -511,7 +526,7 @@ cwd_stoch_model <- function(params) {
     St.f[, 1] <- round(popbio::stable.stage(M)[1:n.age.cats] * n0 * (1 - set.ini.f.prev))
     St.m[, 1] <- round(popbio::stable.stage(M)[(n.age.cats + 1):(n.age.cats * 2)] *
                          n0 * (1 - set.ini.m.prev))
-
+    
   } 
   
   
@@ -655,14 +670,88 @@ cwd_stoch_model <- function(params) {
       It.f[, t, ] <- allocate_deaths(hunted.i.f, It.f[, t, ])
       It.m[, t, ] <- allocate_deaths(hunted.i.m, It.m[, t, ])
       
+      infect = 0 # holder until switched with detection
+      
+      ### Actions
+      if(infect != 0){
+        if(huntingactions == 1){
+          ### Target yearling bucks to reduce density demography [8 - 10%]
+          # Overwriting the season's harvest after bump harvest numbers
+          Ht.f[2, t] <- Ht.f[2, t]*1.1
+          hunted.i.m <- round((rel.risk * Iall.m * Ht.m[, t]) /
+                                (St.m[, t] + rel.risk * Iall.m))
+          hunted.i.m[which(is.na(hunted.i.m))] <- 0
+          hunted.i.m[Iall.m < hunted.i.m] <- Iall.m[Iall.m < hunted.i.m]
+          St.m[, t] <- St.m[, t] - (Ht.m[, t] - hunted.i.m)
+          It.m[, t, ] <- allocate_deaths(hunted.i.m, It.m[, t, ])
+          
+          ### Liberalize harvest season 
+          totalpopn <- sum(Nt.f + Nt.m)
+          totalhunted <- sum(Ht.f[, t] + Ht.m[, t])
+          huntingtarget <- (15000/143758) * n0 
+          prop.popn.to.take <- (totalhunted + huntingtarget)/totalpopn
+          
+          # want to pull a number btw 10 - 20% 
+          huntertake <- sample(10:20, 1)*.01
+          if(prop.popn.to.take >  huntertake){ # check to make sure not harvesting more of popn than random draw of hunter ability 
+            #If harvesting more than draw, modify take to hit hunter draw
+            modify.take <- ((huntertake * totalpopn) - totalhunted)*(1/huntingtarget)
+            huntingtarget <- huntingtarget *modify.take
+          }
+          
+          #get prob for splitting up antlerless
+          antlerless.probs <- c(Nt.m[1]/(Nt.m[1] + sum(Nt.f)), sum(Nt.f)/(Nt.m[1] + sum(Nt.f)))
+          
+          
+          split <- as.vector(table(sample(1:2, size = setsize, replace = T, prob = antlerless.probs)))
+          
+          proportions.f <- Nt.f / sum(Nt.f)  # Calculate proportion
+          Ht.f[, t] <- Ht.f[, t] + round(proportions.f * split[2])  # Calculate harvested numbers
+          if(split[2] > Nt.m[1]){ #stops overharvesting male fawns
+            split[2] <- Nt.m[1]
+          }
+          Ht.m[1, t] <- Ht.f[1, t] + split[2]
+          
+          ## now repeat code to distribute infected (overwriting what did in normal harvest)
+          hunted.i.f <- round((rel.risk * Iall.f * Ht.f[, t]) /
+                                (St.f[, t] + rel.risk * Iall.f))
+          hunted.i.m <- round((rel.risk * Iall.m * Ht.m[, t]) /
+                                (St.m[, t] + rel.risk * Iall.m))
+          
+          hunted.i.f[which(is.na(hunted.i.f))] <- 0
+          hunted.i.m[which(is.na(hunted.i.m))] <- 0
+          
+          hunted.i.f[Iall.f < hunted.i.f] <- Iall.f[Iall.f < hunted.i.f]
+          hunted.i.m[Iall.m < hunted.i.m] <- Iall.m[Iall.m < hunted.i.m]
+          
+          # subtracting out those hunted in the S class
+          St.f[, t] <- St.f[, t] - (Ht.f[, t] - hunted.i.f)
+          St.m[, t] <- St.m[, t] - (Ht.m[, t] - hunted.i.m)
+          
+          # allocate those deaths across the 10 I categories
+          It.f[, t, ] <- allocate_deaths(hunted.i.f, It.f[, t, ])
+          It.m[, t, ] <- allocate_deaths(hunted.i.m, It.m[, t, ])
+          
+        }
+      }
+      
       
       ### Surveillance starts here.. 
       # bio check 10% or less of total harvest - randomly select 10% of available harvest
       # no. individuals available for sampling
       samp <- (sum(Ht.f[, t]) + sum(Ht.m[, t]))*.1
       # split males/females 50/50?
-      samp.f <- round(samp*.5)
-      samp.m <- round(samp*.5)
+      
+      ### Check if number of individuals available for sampling is more or less than target
+      # target = nosampled (set in params)
+      if(samp < nosampled){
+        availableSamples <- samp
+      } else{
+        availableSamples <- nosampled
+      }
+      
+      samp.f <- round(availableSamples*.5)
+      samp.m <- round(availableSamples*.5)
       
       # randomly draw samples
       Samp.f[,t ] <- randomsampling(matrix = Ht.f[, t], target_sum = samp.f, emptysample = Samp.f[,t ])
@@ -688,15 +777,20 @@ cwd_stoch_model <- function(params) {
           # hunt.f.b <- est_beta_params(hunt.mort.ad.f*1.05, hunt.var)
           # hunt.m.b <- est_beta_params(hunt.mort.ad.m*1.05, hunt.var)
           
-          ### Target yearling bucks to reduce density demography [8 - 10%]
-          hunt.juv.m.b <- est_beta_params(hunt.mort.juv.m*1.1, hunt.var)
           
           ### Targeted removal 
           # Increase odds that hunters will remove infected individuals 
-          rel.risk <- 1.5 ## No clue what to change this to
+          rel.risk <- 1 ## No clue what to change this to
           
-          ### Sharp shooting
           if (hunt.mo[t] == 1) { # only doing this once a year, not every month
+            
+            
+            ### Target yearling bucks to reduce density demography [8 - 10%]
+            ## Included in the main harvest section so included in the surveillance 
+            # harvest an additional 10% of yearling bucks from this years harvest
+            
+            
+            ### Sharp shooting  
             # Pull 300 per year until population drops to 5 deer/square mile 
             # In the simulation that would be ?? 
             # According to spreadsheet, target is approximately 15/square mile
@@ -721,8 +815,21 @@ cwd_stoch_model <- function(params) {
               #What should the split between males and females be? 
               split <- as.vector(table(sample(1:2, size = setsize, replace = T)))
               
-              Sharp.f[, t] <- rbinom(n.age.cats, split[1], c(rep(1/n.age.cats, n.age.cats)))
-              Sharp.m[, t] <- rbinom(n.age.cats, split[2], c(rep(1/n.age.cats, n.age.cats)))
+              # ## Redo this, right now, harvesting negative individuals... 
+              # Sharp.f[, t] <- rbinom(n.age.cats, split[1], c(rep(1/n.age.cats, n.age.cats)))
+              # Sharp.m[, t] <- rbinom(n.age.cats, split[2], c(rep(1/n.age.cats, n.age.cats)))
+              
+              Iall.f <- rowSums(It.f[, t, ])  # total # infected females
+              Iall.m <- rowSums(It.m[, t, ])  # total # infected males
+              Nt.f <- St.f[, t] + Iall.f  # total population of females
+              Nt.m <- St.m[, t] + Iall.m  # total population of males
+              
+              proportions.f <- Nt.f / sum(Nt.f)  # Calculate proportions
+              proportions.m <- Nt.m / sum(Nt.m) 
+              Sharp.f[, t] <- round(proportions.f * split[1])  # Calculate harvested numbers
+              Sharp.m[, t] <- round(proportions.m * split[2])  
+              ### Now sharpshooters are harvesting based on what ages in popn are most available
+              
               
               # those hunted in the I class overall based on the total hunted, the total that
               # are susceptible/infected and the relative hunting risk of S v. I can result in
@@ -730,9 +837,9 @@ cwd_stoch_model <- function(params) {
               # are available.
               
               Sharped.i.f <- round((rel.risk * Iall.f * Sharp.f[, t]) /
-                                    (St.f[, t] + rel.risk * Iall.f))
+                                     (St.f[, t] + rel.risk * Iall.f))
               Sharped.i.m <- round((rel.risk * Iall.m * Sharp.m[, t]) /
-                                    (St.m[, t] + rel.risk * Iall.m))
+                                     (St.m[, t] + rel.risk * Iall.m))
               
               Sharped.i.f[which(is.na(Sharped.i.f))] <- 0
               Sharped.i.m[which(is.na(Sharped.i.m))] <- 0
@@ -805,7 +912,13 @@ cwd_stoch_model <- function(params) {
     ### Need to make this conditional or get error when nothing new to add
     if(sum(split) != 0){
       if(length(split) == 1){ split[2] <- 0} # otherwise have issues
-
+      
+      # ini.f.prev <- c(ini.fawn.prev, ini.juv.prev,
+      #                 rep(ini.ad.f.prev, (n.age.cats - 2)))
+      # # initial male prevalence
+      # ini.m.prev <- c(ini.fawn.prev, ini.juv.prev,
+      #                 rep(ini.ad.m.prev, (n.age.cats - 2)))
+      
       ## Need to divide each split number into ago categories
       new.inf.f <- as.vector(rmultinom(1, size = split[1], prob = ini.f.prev))
       new.inf.m <- as.vector(rmultinom(1, size = split[2], prob = ini.m.prev))
@@ -884,4 +997,4 @@ sum_prev <- base_count_popn %>%
   full_join(detected_prev, by = c("year", "month")) %>% 
   mutate(prop_true_prev = trueprev_count/count) %>% 
   mutate(prop_detected_prev = detectedprev_count/count)
-  
+

@@ -760,10 +760,11 @@ cwd_stoch_model <- function(params) {
       Samp.m[,t ] <- randomsampling(matrix = Ht.m[, t], target_sum = samp.m, emptysample = Samp.m[,t ])
       
       # see how many of the samples have infected individuals..
+      time <- t
       I.Samp.f <- infectedSamples(sample = Samp.f[,t ], infected = hunted.i.f, 
-                                  removed = Ht.f[, t], trackInfect = I.Samp.f)
+                                  removed = Ht.f[, t], trackInfect = I.Samp.f, time = time)
       I.Samp.m <- infectedSamples(sample = Samp.m[,t ], infected = hunted.i.m, 
-                                  removed = Ht.m[, t], trackInfect = I.Samp.m)
+                                  removed = Ht.m[, t], trackInfect = I.Samp.m, time = time)
       
       ## Check to see if found any infected individuals
       infect <- sum(I.Samp.f) + sum(I.Samp.m)

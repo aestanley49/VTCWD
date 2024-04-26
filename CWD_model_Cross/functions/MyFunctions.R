@@ -22,7 +22,7 @@ randomsampling <- function(matrix, target_sum, emptysample) {
 
 # identify wether have sampled age classes that could have infected individuals
 infectedSamples <- function(sample = Samp.m[,t ], infected = hunted.i.m, 
-                            removed = Ht.m[, t], trackInfect = I.Samp.m){
+                            removed = Ht.m[, t], trackInfect = I.Samp.m, time = time){
   binarySamp <- sample
   selected_index <- which(binarySamp > 0) 
   binarySamp[selected_index] <- 1
@@ -31,7 +31,7 @@ infectedSamples <- function(sample = Samp.m[,t ], infected = hunted.i.m,
     getindex <- which(ProbInfected == i )
     Noindividualschoosing <- sample[getindex]
     hold <- rbinom(Noindividualschoosing, size = 1, prob = i)
-    trackInfect[getindex, t] <- sum(hold) # keep track of how many infected we find across time and age class
+    trackInfect[getindex, time] <- sum(hold) # keep track of how many infected we find across time and age class
   }
   return(trackInfect)
 }

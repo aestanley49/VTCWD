@@ -628,18 +628,22 @@ cwd_stoch_model <- function(params) {
       #   } 
       # } 
       
-      if (Ht.f[1, t] > 5000 | Ht.m[1, t] > 5000){ #If harvesting too many fawns, redraw harvest numbers
-        Ht.f[, t] <- rbinom(n.age.cats.f, Nt.f, c(hunt.fawn.draw, hunt.juv.f.draw,
-                                                  hunt.f.draw))
-        Ht.m[, t] <- rbinom(n.age.cats.m, Nt.m, c(hunt.fawn.draw, hunt.juv.m.draw,
-                                                  hunt.m.draw))
-        if (Ht.f[1, t] > 5000 | Ht.m[1, t] > 5000){
+      ###If harvesting too many fawns, redraw harvest numbers
+      if(!is.na(Ht.m[1, t]) & !is.na(Ht.f[1, t])){ # This was bugging out
+        if (Ht.f[1, t] > 5000 | Ht.m[1, t] > 5000){ #If harvesting too many fawns, redraw harvest numbers
           Ht.f[, t] <- rbinom(n.age.cats.f, Nt.f, c(hunt.fawn.draw, hunt.juv.f.draw,
                                                     hunt.f.draw))
           Ht.m[, t] <- rbinom(n.age.cats.m, Nt.m, c(hunt.fawn.draw, hunt.juv.m.draw,
                                                     hunt.m.draw))
+          if (Ht.f[1, t] > 5000 | Ht.m[1, t] > 5000){
+            Ht.f[, t] <- rbinom(n.age.cats.f, Nt.f, c(hunt.fawn.draw, hunt.juv.f.draw,
+                                                      hunt.f.draw))
+            Ht.m[, t] <- rbinom(n.age.cats.m, Nt.m, c(hunt.fawn.draw, hunt.juv.m.draw,
+                                                      hunt.m.draw))
+          } 
         } 
-      } 
+      }
+
       
       # those hunted in the I class overall based on the total hunted, the total that
       # are susceptible/infected and the relative hunting risk of S v. I can result in

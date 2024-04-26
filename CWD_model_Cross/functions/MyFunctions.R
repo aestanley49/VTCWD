@@ -16,7 +16,7 @@ randomsampling <- function(matrix, target_sum, emptysample) {
   return(emptysample)
 }
 
-here <- randomsampling(matrix = og, target_sum = 8, emptysample = Samp.f[,t ])
+# here <- randomsampling(matrix = og, target_sum = 8, emptysample = Samp.f[,t ])
 
 ## calculate probability that an individual will have CWD from surveillance sample.. 
 
@@ -35,7 +35,7 @@ infectedSamples <- function(sample = Samp.m[,t ], infected = hunted.i.m,
   }
   return(trackInfect)
 }
-infectedSamples(sample = Samp.m[,t ], infected = hunted.i.m, 
-                            removed = Ht.m[, t], trackInfect = I.Samp.m)
-  
+# infectedSamples(sample = Samp.m[,t ], infected = hunted.i.m, 
+#                             removed = Ht.m[, t], trackInfect = I.Samp.m)
+#   
 

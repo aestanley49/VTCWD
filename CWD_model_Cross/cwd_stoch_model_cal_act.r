@@ -338,10 +338,22 @@ cwd_stoch_model <- function(params) {
     message("arrival_input is missing, using default value")
     arrival_input <- c(0,0,0,0,0,0,0, 0, 0, 0)
   }  
-  
-  if(exists("huntingactions")==FALSE){
-    message("huntingactions is missing, using default value")
-    huntingactions <- 0 #hunting actions are turned off
+  ### Hunting action switches
+  if(exists("Action_young_bucks")==FALSE){
+    message("Action_young_bucks is missing, using default value")
+    Action_young_bucks <- 0 #hunting actions are turned off
+  }
+  if(exists("Action_lib_harvest")==FALSE){
+    message("Action_lib_harvest is missing, using default value")
+    Action_lib_harvest <- 0 #hunting actions are turned off
+  }
+  if(exists("Action_targetrm")==FALSE){
+    message("Action_targetrm is missing, using default value")
+    Action_targetrm <- 0 #hunting actions are turned off
+  }
+  if(exists("Action_sharpshooting")==FALSE){
+    message("Action_sharpshooting is missing, using default value")
+    Action_sharpshooting <- 0 #hunting actions are turned off
   }
   
   
@@ -676,7 +688,7 @@ cwd_stoch_model <- function(params) {
       
       ### Actions
       if(infect != 0 & !is.na(infect)){
-        if(huntingactions == 1){
+        if(Action_young_bucks == 1){
           ### Target yearling bucks to reduce density demography [8 - 10%]
           # Overwriting the season's harvest after bump harvest numbers
           Ht.f[2, t] <- Ht.f[2, t]*1.1
@@ -686,7 +698,8 @@ cwd_stoch_model <- function(params) {
           hunted.i.m[Iall.m < hunted.i.m] <- Iall.m[Iall.m < hunted.i.m]
           St.m[, t] <- St.m[, t] - (Ht.m[, t] - hunted.i.m)
           It.m[, t, ] <- allocate_deaths(hunted.i.m, It.m[, t, ])
-          
+        }
+        if(Action_lib_harvest == 1){
           ### Liberalize harvest season 
           totalpopn <- sum(Nt.f + Nt.m)
           totalhunted <- sum(Ht.f[, t] + Ht.m[, t])
@@ -772,7 +785,7 @@ cwd_stoch_model <- function(params) {
       ## !!! IF find infected individual then 
       
       if(infect != 0 & !is.na(infect)){
-        if(huntingactions == 1){ ## Not doing this for every strategy
+        if(Action_targetrm == 1){ ## Not doing this for every strategy
           ### Expand/liberalize hunting season = increase hunting mort in all age classes/categories
           # hunt.fawn.b <- est_beta_params(hunt.mort.fawn*1.05, hunt.var)
           # hunt.juv.f.b <- est_beta_params(hunt.mort.juv.f*1.05, hunt.var)
@@ -784,7 +797,8 @@ cwd_stoch_model <- function(params) {
           ### Targeted removal 
           # Increase odds that hunters will remove infected individuals 
           rel.risk <- 1 ## No clue what to change this to
-          
+        }
+        if(Action_sharpshooting == 1){
           if (hunt.mo[t] == 1) { # only doing this once a year, not every month
             
             
@@ -980,7 +994,7 @@ cwd_stoch_model <- function(params) {
   output <- list(counts = counts.long, deaths = deaths.long, survillance = mysurveillance.long,
                  sharpshooting = sharpshooting.long, f.R0 = f.R0, m.R0 = m.R0)
 }
-# 
+
 # base_count_popn <- counts.long %>% 
 #   group_by(year, month) %>% 
 #   summarise(count = sum(population))

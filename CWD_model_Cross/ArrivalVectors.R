@@ -159,10 +159,14 @@ ArrivalVecsFunc <- function(n.years = 10, nsims = 50){
     SK_H4 <- as.vector(SK_H1) + SK_H2 + H3
     SQ_H4 <- as.vector(SQ_H1) + SQ_H2 + H3
     
-    listvecs <- list(Ho_H1, SA_H1, PventR_H1, PareR_H1, NoAA_H1, SK_H1, SQ_H1, 
-                     Ho_H2, SA_H2, PventR_H2, PareR_H2, NoAA_H2, SK_H2, SQ_H2, 
-                     H3, H3, H3, H3, H3, H3, H3, 
-                     Ho_H4, SA_H4, PventR_H4, PareR_H4, NoAA_H4, SK_H4, SQ_H4)
+    listvecs <- list(Ho_H1, Ho_H2, H3, Ho_H4,
+                     SA_H1, SA_H2, H3, SA_H4, 
+                     PventR_H1, PventR_H2, H3, PventR_H4, 
+                     PareR_H1, PareR_H2, H3,PareR_H4, 
+                     NoAA_H1, NoAA_H2, H3, NoAA_H4,
+                     SK_H1, SK_H2, H3, SK_H4, 
+                     SQ_H1, SQ_H2, H3, SQ_H4
+                     )
     
     
     counter <- 1

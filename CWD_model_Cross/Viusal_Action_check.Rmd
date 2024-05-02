@@ -55,7 +55,6 @@ Get summary stats from arrival vectors
 *Note, things get weird if n.years doesn't = 25
 ```{r, message=FALSE}
 ArrivalVects <- ArrivalVecsFunc(n.years = 25, nsims = 50)
-ArrivalVects <- arrivalvec2 
 hold <- n.years + 4
 
 ArrivalVects[,5:hold] <- NA
@@ -116,7 +115,6 @@ ggplot(data = ArrivalVects_sumH3,
   # geom_point(aes(color = Strategy), position = "jitter") 
   geom_line(aes(color = Strategy)) 
 
-
 ArrivalVects_sumH4 <- ArrivalVects_sum %>% 
   filter(Hypo == "H4")
 ggplot(data = ArrivalVects_sumH4,
@@ -124,19 +122,52 @@ ggplot(data = ArrivalVects_sumH4,
   # geom_point(aes(color = Strategy), position = "jitter") 
   geom_line(aes(color = Strategy)) 
 
+
+
+
 ```
 Set up as box and wisper plots? Not sure how as working with time series...
+
+Sum of total infected
+```{r}
+ArrivalVects_mean <- ArrivalVects %>% 
+  dplyr::select(-c(Vec)) %>% 
+  mutate(TotalInfect = rowSums(select(., starts_with("time")))) %>% 
+  group_by(Strategy, Hypo) %>% 
+  summarise(mean_TotalInfect = mean(TotalInfect, na.rm = TRUE))
+
+  ArrivalVects_errors <- ArrivalVects %>% 
+  dplyr::select(-c(Vec)) %>% 
+  mutate(TotalInfect = rowSums(select(., starts_with("time")))) %>% 
+  group_by(Strategy, Hypo) %>% 
+    dplyr::summarize(lo = quantile(n, 0.025, na.rm=T),
+                     hi = quantile(n, 0.975, na.rm=T))
+  
+
+
+ArrivalVects %>% 
+   pivot_longer(cols = c("time1",  "time2",  "time3",  "time4",  "time5",  "time6",  "time7",  "time8", "time9",  "time10", "time11", "time12", "time13", "time14", "time15", "time16", "time17", "time18", "time19", "time20", "time21", "time22" , "time23", "time24",
+ "time25"), names_to = "time", values_to = "n") %>%
+  separate(col = time, into = c("time", "number"), sep = "(?<=time)(?=\\d)") %>% 
+  filter(Hypo == "H4") %>% 
+ggplot(
+              aes(x = Strategy, y = n)) +
+  geom_violin() + 
+  geom_boxplot(width=0.1) + 
+  theme_minimal()
+
+```
+
 
 
 
 Heavy Outreach (Ho), Stop Arrival (SA), and Status Quo (SQ) have NO hunting actions
 Prevent and React (PventR), Prepare and React (PareR) and No VAAFM (NoAA) have ALL hunting actions
 number of individuals sampled is determined by strategy 
- statquosamp <- 5
- prv2.5_90samp <- 125
- nosampled <- statquosamp
- prv1_99samp <- 460
- prv1_90samp <- 230
+ statquosamp <- 5 [SA, SQ]
+ prv2.5_90samp <- 125 [PventR, NoAA]
+ prv1_99samp <- 460 [PareR, KitchenSink - SK]
+ prv1_90samp <- 230 #[Ho]
 
 
 ```{r Stat Quo}
@@ -166,4 +197,81 @@ plot_stoch_prev_single(simsout$counts, all.lines = TRUE)
 plot_stoch_abundance(simsout, all.lines = TRUE, error.bars)
 plot_stoch_harvest(simsout, all.lines, error.bars, detectbar, harvesttype= 1)
 ```
+
+Values need for the consequence table.. 
+```{r}
+### detection time stamp
+detection_time_func <- function(dat){
+    detected_prev <- dat$survillance %>%
+    filter(population > 0) %>%
+    group_by(sim, year, month) %>%
+    summarise(detectedprev_count = n()) %>% 
+    group_by(sim) %>%
+    summarise(min_year = min(year))
+  
+  Avg_min_year = mean(detected_prev$min_year) # this is the average value 
+  return(Avg_min_year)
+}
+detection_time(simsout)
+
+### Spread/prevalence - The true state of percent prevalence of CWD after 25 years 
+prev_func <- function(dat){
+final_prev <- dat$counts %>%
+  filter(month %% 12 == 1) %>%
+  group_by(year, disease) %>%
+  summarise(n = sum(population), .groups = "drop") %>%
+  spread(key = disease, value = n) %>%
+  mutate(prev = yes / (no + yes)) %>%
+  arrange(desc(year)) %>%
+  slice(1) %>%
+  select(prev)
+return(final_prev)
+}
+
+### Average size of the deer population over 25 years (“Population”)
+#!!! Check the way the averaging is set up here... !!!
+
+detection_time <- function(dat){
+  dat.counts <- dat$counts
+  dat.sum <- dat.counts %>%
+    filter(month %% 12 == 11) %>%
+    group_by(year) %>%
+    dplyr::summarize(n = sum(population)) %>% 
+    dplyr::summarize(avg = mean(n, na.rm = T))
+  return(dat.sum)
+}
+
+```
+
+
+
+```{r Heavy Outreach}
+params <- list(fawn.an.sur = 0.7, juv.an.sur = 0.8, ad.an.f.sur = 0.82,
+               ad.an.m.sur = 0.8, fawn.repro = 0.06, juv.repro = 1.3, ad.repro = 1.4,
+               hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.1,
+               hunt.mort.ad.f = 0.12, hunt.mort.ad.m = 0.50,
+                ini.fawn.prev = 0.01,
+                ini.juv.prev = 0.03, ini.ad.f.prev = 0.04,  ini.ad.m.prev = 0.04,
+               n.age.cats = 12,  n.age.cats.m = 10, n.age.cats.f = 15,
+                p = 0.27, env.foi = 0,  beta.f = 0.028,  beta.m = 0.028,
+               theta = 0.9, n0 = 10000, n.years = 10, rel.risk = 1.0,
+               repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.0005,
+               juv.sur.var = 0.005, ad.f.sur.var = 0.005, ad.m.sur.var = 0.005,
+             juv.repro.var = 0.005, ad.repro.var = 0.005,
+             WSI = 1,
+             arrival_input = c(100,100,1,1,1,1,5, 1, 8, 14), 
+             Action_young_bucks = 0, Action_lib_harvest = 0, Action_targetrm = 0, Action_sharpshooting = 0,
+             nosampled = 5
+)
+
+# simsout <- cwd_stoch_model(params)
+simsout <- cwd_stoch_wrapper(params, nsims = 50, n.years = 25, strat = "SQ", hypothesis = "H1")
+## Inputs here need to line up.. with params values
+
+plot_stoch_prev_single(simsout$counts, all.lines = TRUE)
+plot_stoch_abundance(simsout, all.lines = TRUE, error.bars)
+plot_stoch_harvest(simsout, all.lines, error.bars, detectbar, harvesttype= 1)
+```
+
+
 

@@ -40,7 +40,7 @@
 #' 
 #' @export
 
-cwd_stoch_wrapper <- function(params, nsims, strat, hypothesis) {
+cwd_stoch_wrapper <- function(params, nsims, strat, hypothesis, n.years) {
   
   if(missing(nsims) == T) warning('nsims not provided')
   if(missing(params) == T) warning('params not provided')
@@ -57,7 +57,7 @@ cwd_stoch_wrapper <- function(params, nsims, strat, hypothesis) {
   survillance.sims <- vector("list", nsims)
   
   for(i in 1:nsims){
-    params$arrival_input <- ArrivalVec$Vec[i]
+    params$arrival_input <- unlist(ArrivalVec$Vec[i])
     outa <- cwd_stoch_model(params)
     counts.sims[[i]] <- outa$counts
     deaths.sims[[i]] <- outa$deaths

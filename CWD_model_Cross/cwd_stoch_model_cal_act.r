@@ -525,10 +525,10 @@ cwd_stoch_model <- function(params) {
     
     # randomly allocating infecteds across ages and categories.
     It.f[, 1, 1:10] <- rbinom(n.age.cats.f * 10, round(popbio::stable.stage(M)[1:n.age.cats.f] *
-                                                         n0/10), ini.f.prev)
+                                                         n0/10), set.ini.f.prev)
     It.m[, 1, 1:10] <- rbinom(n.age.cats.m * 10, round(popbio::stable.stage(M)
                                                        [(n.age.cats.f + 1):(n.age.cats.f + n.age.cats.m)] *
-                                                         n0/10), ini.m.prev)
+                                                         n0/10), set.ini.m.prev)
     
     # Intializing with the stable age distribution.
     St.f[, 1] <- round(popbio::stable.stage(M)[1:n.age.cats.f] * n0 * (1 - set.ini.f.prev))
@@ -763,7 +763,7 @@ cwd_stoch_model <- function(params) {
         if(Action_young_bucks == 1){
           ### Target yearling bucks to reduce density demography [8 - 10%]
           # Overwriting the season's harvest after bump harvest numbers
-          Ht.f[2, t] <- Ht.f[2, t]*1.1
+          Ht.m[2, t] <- Ht.m[2, t]*1.1
           hunted.i.m <- round((rel.risk * Iall.m * Ht.m[, t]) /
                                 (St.m[, t] + rel.risk * Iall.m))
           hunted.i.m[which(is.na(hunted.i.m))] <- 0

@@ -359,10 +359,7 @@ cwd_stoch_model <- function(params) {
     message("Action_lib_harvest is missing, using default value")
     Action_lib_harvest <- 0 #hunting actions are turned off
   }
-  if(exists("Action_targetrm")==FALSE){
-    message("Action_targetrm is missing, using default value")
-    Action_targetrm <- 0 #hunting actions are turned off
-  }
+
   if(exists("Action_sharpshooting")==FALSE){
     message("Action_sharpshooting is missing, using default value")
     Action_sharpshooting <- 0 #hunting actions are turned off
@@ -855,24 +852,11 @@ cwd_stoch_model <- function(params) {
       ## !!! IF find infected individual then 
       
       if(infect != 0 & !is.na(infect)){
-        if(Action_targetrm == 1){ ## Not doing this for every strategy
-          ### Expand/liberalize hunting season = increase hunting mort in all age classes/categories
-          # hunt.fawn.b <- est_beta_params(hunt.mort.fawn*1.05, hunt.var)
-          # hunt.juv.f.b <- est_beta_params(hunt.mort.juv.f*1.05, hunt.var)
-          # # hunt.juv.m.b <- est_beta_params(hunt.mort.juv.m*1.05, hunt.var)
-          # hunt.f.b <- est_beta_params(hunt.mort.ad.f*1.05, hunt.var)
-          # hunt.m.b <- est_beta_params(hunt.mort.ad.m*1.05, hunt.var)
 
-          
-          ### Targeted removal 
-          # Increase odds that hunters will remove infected individuals 
-          rel.risk <- 1.5 
-        }
         if(Action_sharpshooting == 1){
-            
-            ### Target yearling bucks to reduce density demography [8 - 10%]
-            ## Included in the main harvest section so included in the surveillance 
-            # harvest an additional 10% of yearling bucks from this years harvest
+          
+          ### Change rel.risk parameter only for sharpshooting
+          rel.risk <- 1.5 
 
           
             ### Sharp shooting  
@@ -947,6 +931,8 @@ cwd_stoch_model <- function(params) {
               It.f[, t, ] <- allocate_deaths(Sharped.i.f, It.f[, t, ])
               It.m[, t, ] <- allocate_deaths(Sharped.i.m, It.m[, t, ])
               
+              ### Change rel.risk parameter back to normal
+              rel.risk <- 1
               
             }
           } 

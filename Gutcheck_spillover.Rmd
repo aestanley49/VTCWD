@@ -1,0 +1,42 @@
+---
+title: "Gutcheck_spillover"
+output: pdf_document
+date: "2024-05-09"
+---
+
+
+Load in file and libraries 
+```{r, message = FALSE, warning=FALSE}
+source("CWD_model_Cross/functions/est_beta_params.R")
+source("CWD_model_Cross/functions/allocate_deaths.R")
+source("CWD_model_Cross/functions/MyFunctions.R")
+source("CWD_model_Cross/cwd_stoch_model_cal_act.r")
+source("CWD_model_Cross/ArrivalVectors.R")
+source("CWD_model_Cross/functions/cwd_stoch_wrapper_mod.r")
+source("CWD_model_Cross/functions/ComHyposFunc.R")
+source("CWD_model_Cross/functions/Plot_funcs.R")
+library(foreach)
+library(doParallel)
+library(tidyverse)
+library(reshape2)
+library(patchwork)
+```
+
+
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 7"}
+CompareAltsFunc(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "prevalence")
+
+```
+
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 8"}
+CompareAltsFunc(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "abundance")
+
+```
+
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 9"}
+CompareAltsFunc(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "harvest")
+
+```

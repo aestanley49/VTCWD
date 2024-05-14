@@ -1,6 +1,4 @@
 
-### Right now just actions... 
-
 
 ## Additional pieces... 
 
@@ -420,6 +418,8 @@ cwd_stoch_model <- function(params) {
   if(hunt.var <= 0) warning("hunt.var must be positive")
   
   ######### CREATE INITIAL CONDITIONS##########
+  
+  
   months <- seq(1, n.years * 12)  # monthly timestep
   hunt.mo <- rep(0, n.years * 12)  # months in where the hunt occurs
   hunt.mo[months%%12 == 7] <- 1  # hunt.mo==1 on Nov
@@ -732,6 +732,67 @@ cwd_stoch_model <- function(params) {
         } 
       }
       
+      
+      ### Switch for infect parameter (need to be able to turn this on, not hold at 0)
+      if(!exists("infect")){
+        infect = 0 # holder until switched with detection
+      }
+      
+      ### Actions
+      if(infect != 0){
+        if(Action_young_bucks == 1){
+          ### Target yearling bucks to reduce density demography [8 - 10%]
+          # Overwriting the season's harvest after bump harvest numbers
+          Ht.m[2, t] <- round(Ht.m[2, t]*1.1)
+        }
+        if(Action_lib_harvest == 1){ # produces warnings bc different lengths but functionally fine
+          ### Liberalize harvest season 
+          totalpopn <- sum(Nt.f + Nt.m)
+          totalhunted <- sum(Ht.f[, t] + Ht.m[, t])
+          huntingtarget <- (15000/143758) * n0 # make 4x bigger 
+          prop.popn.to.take <- ((totalhunted + huntingtarget)/totalpopn )
+          
+          # want to pull a number btw 10 - 20% 
+          huntertake <- sample(10:20, 1)*.01
+          if(prop.popn.to.take >  huntertake){ # check to make sure not harvesting more of popn than random draw of hunter ability
+            if(totalhunted/totalpopn > huntertake){
+              huntingtarget <- 2 # effectively not increasing harvest 
+            }else{
+              #If harvesting more than draw, modify take to hit hunter draw
+              modify.take <- ((huntertake * totalpopn) - totalhunted)*(1/huntingtarget)
+              huntingtarget <- huntingtarget *modify.take
+            }
+          }
+          
+          #get prob for splitting up antlerless
+          antlerless.probs <- c(Nt.m[1]/(Nt.m[1] + sum(Nt.f)), sum(Nt.f)/(Nt.m[1] + sum(Nt.f)))
+          
+          
+          split <- as.vector(table(sample(1:2, size = huntingtarget, replace = T, prob = antlerless.probs)))
+          
+          if(huntingtarget == 2){ ## making sure no weird errors happen
+            split <- c(1,1)
+          }    
+          if(length(split) == 0){ ## another weird error
+            split <- c(1,1)
+          }
+          if(length(split) == 1){ ## another weird error
+            split[2] <- c(1)
+          }
+          
+          proportions.f <- Nt.f / sum(Nt.f)  # Calculate proportion
+          Ht.f[, t] <- Ht.f[, t] + round(proportions.f * split[2])  # Calculate harvested numbers
+            if(split[2] > Nt.m[1]){ #stops overharvesting male fawns
+              split[2] <- Nt.m[1]
+            }
+          Ht.m[1, t] <- Ht.m[1, t] + split[1] # change from Ht.f[1, t] + split[2]
+          
+        }
+      } # close first action loop 
+      
+      
+      
+      
       # those hunted in the I class overall based on the total hunted, the total that
       # are susceptible/infected and the relative hunting risk of S v. I can result in
       # a divide by 0 and NA.  this can also result in more hunting of a category than
@@ -755,72 +816,7 @@ cwd_stoch_model <- function(params) {
       # allocate those deaths across the 10 I categories
       It.f[, t, ] <- allocate_deaths(hunted.i.f, It.f[, t, ])
       It.m[, t, ] <- allocate_deaths(hunted.i.m, It.m[, t, ])
-      
-      infect = 0 # holder until switched with detection
-      
-      ### Actions
-      if(infect != 0 & !is.na(infect)){
-        if(Action_young_bucks == 1){
-          ### Target yearling bucks to reduce density demography [8 - 10%]
-          # Overwriting the season's harvest after bump harvest numbers
-          Ht.m[2, t] <- Ht.m[2, t]*1.1
-          hunted.i.m <- round((rel.risk * Iall.m * Ht.m[, t]) /
-                                (St.m[, t] + rel.risk * Iall.m))
-          hunted.i.m[which(is.na(hunted.i.m))] <- 0
-          hunted.i.m[Iall.m < hunted.i.m] <- Iall.m[Iall.m < hunted.i.m]
-          St.m[, t] <- St.m[, t] - (Ht.m[, t] - hunted.i.m)
-          It.m[, t, ] <- allocate_deaths(hunted.i.m, It.m[, t, ])
-        }
-        if(Action_lib_harvest == 1){
-          ### Liberalize harvest season 
-          totalpopn <- sum(Nt.f + Nt.m)
-          totalhunted <- sum(Ht.f[, t] + Ht.m[, t])
-          huntingtarget <- (15000/143758) * n0 
-          prop.popn.to.take <- (totalhunted + huntingtarget)/totalpopn
-          
-          # want to pull a number btw 10 - 20% 
-          huntertake <- sample(10:20, 1)*.01
-          if(prop.popn.to.take >  huntertake){ # check to make sure not harvesting more of popn than random draw of hunter ability 
-            #If harvesting more than draw, modify take to hit hunter draw
-            modify.take <- ((huntertake * totalpopn) - totalhunted)*(1/huntingtarget)
-            huntingtarget <- huntingtarget *modify.take
-          }
-          
-          #get prob for splitting up antlerless
-          antlerless.probs <- c(Nt.m[1]/(Nt.m[1] + sum(Nt.f)), sum(Nt.f)/(Nt.m[1] + sum(Nt.f)))
-          
-          
-          split <- as.vector(table(sample(1:2, size = setsize, replace = T, prob = antlerless.probs)))
-              
-          proportions.f <- Nt.f / sum(Nt.f)  # Calculate proportion
-          Ht.f[, t] <- Ht.f[, t] + round(proportions.f * split[2])  # Calculate harvested numbers
-          if(split[2] > Nt.m[1]){ #stops overharvesting male fawns
-            split[2] <- Nt.m[1]
-          }
-          Ht.m[1, t] <- Ht.f[1, t] + split[2]
-          
-          ## now repeat code to distribute infected (overwriting what did in normal harvest)
-          hunted.i.f <- round((rel.risk * Iall.f * Ht.f[, t]) /
-                                (St.f[, t] + rel.risk * Iall.f))
-          hunted.i.m <- round((rel.risk * Iall.m * Ht.m[, t]) /
-                                (St.m[, t] + rel.risk * Iall.m))
-          
-          hunted.i.f[which(is.na(hunted.i.f))] <- 0
-          hunted.i.m[which(is.na(hunted.i.m))] <- 0
-          
-          hunted.i.f[Iall.f < hunted.i.f] <- Iall.f[Iall.f < hunted.i.f]
-          hunted.i.m[Iall.m < hunted.i.m] <- Iall.m[Iall.m < hunted.i.m]
-          
-          # subtracting out those hunted in the S class
-          St.f[, t] <- St.f[, t] - (Ht.f[, t] - hunted.i.f)
-          St.m[, t] <- St.m[, t] - (Ht.m[, t] - hunted.i.m)
-          
-          # allocate those deaths across the 10 I categories
-          It.f[, t, ] <- allocate_deaths(hunted.i.f, It.f[, t, ])
-          It.m[, t, ] <- allocate_deaths(hunted.i.m, It.m[, t, ])
-          
-        }
-      }
+    
       
       
       ### Surveillance starts here.. 
@@ -854,6 +850,8 @@ cwd_stoch_model <- function(params) {
       ## Check to see if found any infected individuals
       infect <- sum(I.Samp.f) + sum(I.Samp.m)
       
+    
+      
       ## !!! IF find infected individual then 
       
       if(infect != 0 & !is.na(infect)){
@@ -871,8 +869,6 @@ cwd_stoch_model <- function(params) {
           rel.risk <- 1.5 
         }
         if(Action_sharpshooting == 1){
-          if (hunt.mo[t] == 1) { # only doing this once a year, not every month
-            
             
             ### Target yearling bucks to reduce density demography [8 - 10%]
             ## Included in the main harvest section so included in the surveillance 
@@ -957,10 +953,9 @@ cwd_stoch_model <- function(params) {
           
           ### Breakup winter aggregation with harassment = reduce transmission by 25%
           ## **** Note this is only 2 strategies - include? Makes life harder..
-          beta.f = beta.f*.75 ; beta.m = beta.m*.75
+          # beta.f = beta.f*.75 ; beta.m = beta.m*.75
         }
-      }
-    }
+      } # close second action loop
     
     # Disease mortality stochastic movement of individuals from I1 to I2 disease
     # induced mortality here by advancing all I's and only a proportion of the 10th
@@ -1031,7 +1026,6 @@ cwd_stoch_model <- function(params) {
       It.f[, t, 1] <- new.inf.f
       It.m[, t, 1] <- new.inf.m
     }
-    
     # Environmental transmission happens last
     envcases.f <- rbinom(n.age.cats.f, St.f[, t], env.foi)
     envcases.m <- rbinom(n.age.cats.m, St.m[, t], env.foi)
@@ -1084,4 +1078,24 @@ cwd_stoch_model <- function(params) {
                  sharpshooting = sharpshooting.long, f.R0 = f.R0, m.R0 = m.R0)
 }
 
+### Comment this all out when done
+## Making graphs to check each action for single run of model
+
+### Pick up here - make graph function for single run of model (use outputs..)
+# arrival_line <- min(which(arrival > 0))/12
+
+
+ # noact_prev <- plot_prev(output)
+ # noact_abund <- plot_abundnace(output)
+ # noact_harv <- plot_stoch_harvest(output, harvesttype= 1)
+ # noact_harv_juv <- plot_stoch_harvest(output, harvesttype= 2)
+ # noact_harv_antlerless <- plot_stoch_harvest(output, harvesttype= 3)
+
+# prev <- plot_prev(output)
+# abund <- plot_abundnace(output)
+# harv <- plot_stoch_harvest(output, harvesttype= 1)
+# harv_juv <- plot_stoch_harvest(output, harvesttype= 2)
+# harv_antlerless <- plot_stoch_harvest(output, harvesttype= 3)
+# 
+# plot_sharpshooting(output)
 

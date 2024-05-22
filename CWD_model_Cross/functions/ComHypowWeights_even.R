@@ -1,5 +1,11 @@
 ### The basis for this is that Hypos are all equally weighted, don't need to worry about weights and SD later
 
+source("CWD_model_Cross/functions/est_beta_params.R")
+source("CWD_model_Cross/functions/allocate_deaths.R")
+source("CWD_model_Cross/functions/MyFunctions.R")
+source("CWD_model_Cross/cwd_stoch_model_cal_act.r")
+source("CWD_model_Cross/ArrivalVectors.R")
+source("CWD_model_Cross/functions/cwd_stoch_wrapper_mod.r")
 
 ComHypowWeights_opt2 <- function(selectstrat = "SQ"){
   
@@ -32,7 +38,7 @@ ComHypowWeights_opt2 <- function(selectstrat = "SQ"){
                    repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.0005, juv.sur.var = 0.005, ad.f.sur.var = 0.005, ad.m.sur.var = 0.005, juv.repro.var = 0.005, ad.repro.var = 0.005,
                    WSI = 1,
                    arrival_input = c(0,0,0,0,0,0,0, 0, 0, 0), 
-                   Action_young_bucks = 1, Action_lib_harvest = 0, Action_targetrm = 1, Action_sharpshooting = 0,
+                   Action_young_bucks = 1, Action_lib_harvest = 1, Action_sharpshooting = 1,
                    nosampled = 125
     )
     if(selectstrat == "PareR" | selectstrat == "SK"){

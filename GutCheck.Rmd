@@ -6,11 +6,6 @@ output:
 date: "2024-05-09"
 ---
 
-!!! Start with checking that model is responsive to parameters set when run with multiple sims
-Then move on to multi hypothesis loop 
-
-Then need to make graph Brittany suggested to test stochasticity (detection - arrival time?)
-
 Load in file and libraries 
 ```{r, message = FALSE, warning=FALSE}
 source("CWD_model_Cross/functions/est_beta_params.R")
@@ -30,6 +25,36 @@ library(tidyverse)
 library(reshape2)
 library(patchwork)
 ```
+
+```{r, message = FALSE, warning=FALSE}
+params <- list(fawn.an.sur = 0.7, juv.an.sur = 0.8, ad.an.f.sur = 0.82,
+               ad.an.m.sur = 0.8, fawn.repro = 0.06, juv.repro = 1.3, ad.repro = 1.4,
+               hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.1,
+               hunt.mort.ad.f = 0.12, hunt.mort.ad.m = 0.50,
+                ini.fawn.prev = 0.01,
+                ini.juv.prev = 0.03, ini.ad.f.prev = 0.04,  ini.ad.m.prev = 0.04,
+               n.age.cats = 12,  n.age.cats.m = 10, n.age.cats.f = 15,
+                p = 0.27, env.foi = 0,  beta.f = 0.0,  beta.m = 0.0,
+               theta = 0.9, n0 = 10000, n.years = 25, rel.risk = 1.0,
+               repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.0005,
+               juv.sur.var = 0.005, ad.f.sur.var = 0.005, ad.m.sur.var = 0.005,
+             juv.repro.var = 0.005, ad.repro.var = 0.005,
+             WSI = 1,
+             arrival_input = c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0), 
+             Action_young_bucks = 0, Action_lib_harvest = 0,  Action_sharpshooting = 0,
+             nosampled = 460
+)
+
+simsout_H1_w <- cwd_stoch_wrapper_setARV(params, nsims = 20, n.years = 25)
+
+prev_wAct <- plot_stoch_prev_single(simsout_H1_w$counts, all.lines = TRUE)
+ H1_abund <- plot_stoch_abundance(simsout_H1_w, all.lines = TRUE, error.bars)
+# H1_harv <- plot_stoch_harvest(simsout_H1_w, harvesttype= 2)
+ ### Not working!! ^^^
+
+```
+
+
 
 
 ### Try turning on hunting actions on one by one
@@ -55,14 +80,14 @@ params <- list(fawn.an.sur = 0.7, juv.an.sur = 0.8, ad.an.f.sur = 0.82,
              juv.repro.var = 0.005, ad.repro.var = 0.005,
              WSI = 1,
              arrival_input = c(0,0,0,200,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,1,0,0,0), 
-             Action_young_bucks = 0, Action_lib_harvest = 0, Action_targetrm = 0, Action_sharpshooting = 1,
+             Action_young_bucks = 0, Action_lib_harvest = 0,  Action_sharpshooting = 1,
              nosampled = 460
 )
 
 simsout_H1_w <- cwd_stoch_wrapper_setARV(params, nsims = 20, n.years = 25)
 
 prev_wAct <- plot_stoch_prev_single(simsout_H1_w$counts, all.lines = TRUE)
-# H1_abund <- plot_stoch_abundance(simsout_H1_w, all.lines = TRUE, error.bars)
+infect_w <- plot_stoch_infected_indiv(simsout_H1_w, all.lines = TRUE, error.bars)
 # H1_harv <- plot_stoch_harvest(simsout_H1_w, all.lines, error.bars, detectbar, harvesttype= 1)
 
 #plot_stoch_harvest(simsout_H1_w, all.lines, error.bars, detectbar, harvesttype= 2)
@@ -70,12 +95,18 @@ prev_wAct <- plot_stoch_prev_single(simsout_H1_w$counts, all.lines = TRUE)
 
 params$Action_sharpshooting <- 0
 
-simsout_H1_wo <- cwd_stoch_wrapper_setARV(params, nsims = 10, n.years = 25)
+simsout_H1_wo <- cwd_stoch_wrapper_setARV(params, nsims = 20, n.years = 25)
+
+infect_wo <- plot_stoch_infected_indiv(simsout_H1_wo, all.lines = TRUE, error.bars)
 
 prev_woAct <- plot_stoch_prev_single(simsout_H1_wo$counts, all.lines = TRUE)
 
 prev_wAct + prev_woAct
 
+sharpshooteffect <- infect_w + infect_wo
+
+ggsave(plot = sharpshooteffect, "CWD_model_Cross/MayWorkshopPlots/sharpshootplot.png",
+       width = 6, height = 4)
 
 ## plot sharpshooting
 
@@ -86,47 +117,12 @@ prev_wAct + prev_woAct
     dplyr::summarize(n = sum(population)) %>%
     arrange(sim, year)
   
-ggplot(data = data, aes(x = year, y = n, group = sim)) +
+sharpshoot <- ggplot(data = data, aes(x = year, y = n, group = sim)) +
     geom_line(color = "grey")
+
   
 ```
 
-Action_targetrm changes relative risk of deer being removed by hunter from 1 to 1.5 (doubles likelihood)
-Not going to see that playout anywhere besides prevalence 
-
-```{r target removal, message = FALSE, warning=FALSE, fig.cap= "Figure 2: Test 'target removal' action (with action is on left)"}
-params <- list(fawn.an.sur = 0.7, juv.an.sur = 0.8, ad.an.f.sur = 0.82,
-               ad.an.m.sur = 0.8, fawn.repro = 0.06, juv.repro = 1.3, ad.repro = 1.4,
-               hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.1,
-               hunt.mort.ad.f = 0.12, hunt.mort.ad.m = 0.50,
-                ini.fawn.prev = 0.01,
-                ini.juv.prev = 0.03, ini.ad.f.prev = 0.04,  ini.ad.m.prev = 0.04,
-               n.age.cats = 12,  n.age.cats.m = 10, n.age.cats.f = 15,
-                p = 0.27, env.foi = 0,  beta.f = 0.028,  beta.m = 0.028,
-               theta = 0.9, n0 = 10000, n.years = 25, rel.risk = 1.0,
-               repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.0005,
-               juv.sur.var = 0.005, ad.f.sur.var = 0.005, ad.m.sur.var = 0.005,
-             juv.repro.var = 0.005, ad.repro.var = 0.005,
-             WSI = 1,
-             arrival_input = c(0,0,0,0,0,0,200,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,1,0,0,0), 
-             Action_young_bucks = 0, Action_lib_harvest = 0, Action_targetrm = 1, Action_sharpshooting = 0,
-             nosampled = 460
-)
-
-simsout_H1_w <- cwd_stoch_wrapper_setARV(params, nsims = 10, n.years = 25)
-
-H1_prev_wAction <- plot_stoch_prev_single(simsout_H1_w$counts, all.lines = TRUE)
-
-
-
-params$Action_targetrm <- 0
-
-simsout_H1_wo <- cwd_stoch_wrapper_setARV(params, nsims = 10, n.years = 25)
-H1_prev_woAction <- plot_stoch_prev_single(simsout_H1_wo$counts, all.lines = TRUE)
-
-
-H1_prev_wAction + H1_prev_woAction
-```
 
 
 
@@ -148,25 +144,29 @@ params <- list(fawn.an.sur = 0.7, juv.an.sur = 0.8, ad.an.f.sur = 0.82,
              juv.repro.var = 0.005, ad.repro.var = 0.005,
              WSI = 1,
              arrival_input = c(0,0,0,0,0,0,200,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,1,0,0,0), 
-             Action_young_bucks = 0, Action_lib_harvest = 1, Action_targetrm = 0, Action_sharpshooting = 0,
+             Action_young_bucks = 0, Action_lib_harvest = 1, Action_sharpshooting = 0,
              nosampled = 460
 )
 
 simsout_w_act <- cwd_stoch_wrapper_setARV(params, nsims = 50, n.years = 25)
-allharv_w <- plot_stoch_harvest(simsout_w_act, all.lines, error.bars, detectbar, harvesttype= 1)
+allharv_w <- plot_stoch_harvest(simsout_w_act, harvesttype= 1)
 
 
-antlerless_w <- plot_stoch_harvest(simsout_w_act, all.lines, error.bars, detectbar, harvesttype= 3)
+antlerless_w <- plot_stoch_harvest(simsout_w_act,  harvesttype= 3)
 
 
 params$Action_lib_harvest <- 0
 
 simsout_wo_act <- cwd_stoch_wrapper_setARV(params, nsims = 50, n.years = 25)
-allharv_wo <- plot_stoch_harvest(simsout_wo_act, all.lines, error.bars, detectbar, harvesttype= 1)
+allharv_wo <- plot_stoch_harvest(simsout_wo_act,  harvesttype= 1)
 
-antlerless_wo <- plot_stoch_harvest(simsout_wo_act, all.lines, error.bars, detectbar, harvesttype= 3)
+antlerless_wo <- plot_stoch_harvest(simsout_wo_act,  harvesttype= 3)
 
-(allharv_w + allharv_wo) / (antlerless_w + antlerless_wo)
+antlerlessplot <- (allharv_w + allharv_wo) / (antlerless_w + antlerless_wo)
+
+ggsave(plot = antlerlessplot, "CWD_model_Cross/MayWorkshopPlots/antlerlessplot.png",
+       width = 6, height = 4)
+
 
 ## Let's try setting hunter's take to 20% (aka amount of popn that hunters can remove - set high)
 # line 782
@@ -203,14 +203,14 @@ params <- list(fawn.an.sur = 0.7, juv.an.sur = 0.8, ad.an.f.sur = 0.82,
              juv.repro.var = 0.005, ad.repro.var = 0.005,
              WSI = 1,
              arrival_input = c(0,0,0,0,0,0,200,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,1,0,0,0), 
-             Action_young_bucks = 1, Action_lib_harvest = 0, Action_targetrm = 0, Action_sharpshooting = 0,
+             Action_young_bucks = 1, Action_lib_harvest = 0,  Action_sharpshooting = 0,
              nosampled = 460
 )
 
 simsout_w_act <- cwd_stoch_wrapper_setARV(params, nsims = 30, n.years = 25)
-allharv_w <- plot_stoch_harvest(simsout_w_act, all.lines, error.bars, detectbar, harvesttype= 1)
+allharv_w <- plot_stoch_harvest(simsout_w_act,  harvesttype= 1)
 
-juvharv_w <- plot_stoch_harvest(simsout_w_act, all.lines, error.bars, detectbar, harvesttype= 2)
+juvharv_w <- plot_stoch_harvest(simsout_w_act,  harvesttype= 2)
 antlerless_w <- plot_stoch_harvest(simsout_w_act, all.lines, error.bars, detectbar, harvesttype= 3)
 
 abund_w <- plot_stoch_abundance(simsout_w_act, all.lines = TRUE, error.bars)
@@ -219,16 +219,18 @@ abund_w <- plot_stoch_abundance(simsout_w_act, all.lines = TRUE, error.bars)
 params$Action_young_bucks <- 0
 
 simsout_wo_act <- cwd_stoch_wrapper_setARV(params, nsims = 30, n.years = 25)
-allharv_wo <- plot_stoch_harvest(simsout_wo_act, all.lines, error.bars, detectbar, harvesttype= 1)
+allharv_wo <- plot_stoch_harvest(simsout_wo_act,  harvesttype= 1)
 
-juvharv_wo <- plot_stoch_harvest(simsout_wo_act, all.lines, error.bars, detectbar, harvesttype= 2)
+juvharv_wo <- plot_stoch_harvest(simsout_wo_act,  harvesttype= 2)
 antlerless_wo <- plot_stoch_harvest(simsout_wo_act, all.lines, error.bars, detectbar, harvesttype= 3)
 
 abund_wo <- plot_stoch_abundance(simsout_wo_act, all.lines = TRUE, error.bars)
 
 
-(allharv_w + allharv_wo) / (juvharv_w + juvharv_wo)
+juvharvplot <- (allharv_w + allharv_wo) / (juvharv_w + juvharv_wo)
 
+ggsave(plot = juvharvplot, "CWD_model_Cross/MayWorkshopPlots/juvharvplot.png",
+       width = 6, height = 4)
 
 abund_w + abund_wo
 
@@ -259,7 +261,7 @@ ComHypowSelectH <- function(selectstrat = "SQ", selecthypo = "H1"){
                    repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.0005, juv.sur.var = 0.005, ad.f.sur.var = 0.005, ad.m.sur.var = 0.005, juv.repro.var = 0.005, ad.repro.var = 0.005,
                    WSI = 1,
                    arrival_input = c(0,0,0,0,0,0,0, 0, 0, 0), 
-                   Action_young_bucks = 0, Action_lib_harvest = 0, Action_targetrm = 0, Action_sharpshooting = 0,
+                   Action_young_bucks = 0, Action_lib_harvest = 0,  Action_sharpshooting = 0,
                    nosampled = 100
     )
     if(selectstrat == "Ho"){
@@ -276,7 +278,7 @@ ComHypowSelectH <- function(selectstrat = "SQ", selecthypo = "H1"){
                    repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.0005, juv.sur.var = 0.005, ad.f.sur.var = 0.005, ad.m.sur.var = 0.005, juv.repro.var = 0.005, ad.repro.var = 0.005,
                    WSI = 1,
                    arrival_input = c(0,0,0,0,0,0,0, 0, 0, 0), 
-                   Action_young_bucks = 0, Action_lib_harvest = 0, Action_targetrm = 0, Action_sharpshooting = 0,
+                   Action_young_bucks = 0, Action_lib_harvest = 0,  Action_sharpshooting = 0,
                    nosampled = 100
     )
     if(selectstrat == "PareR" | selectstrat == "SK"){
@@ -321,7 +323,7 @@ ComHypowSelectH <- function(selectstrat = "SQ", selecthypo = "H1"){
                    repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.0005, juv.sur.var = 0.005, ad.f.sur.var = 0.005, ad.m.sur.var = 0.005, juv.repro.var = 0.005, ad.repro.var = 0.005,
                    WSI = 1,
                    arrival_input = c(0,0,0,0,0,0,0, 0, 0, 0), 
-                   Action_young_bucks = 0, Action_lib_harvest = 0, Action_targetrm = 0, Action_sharpshooting = 0,
+                   Action_young_bucks = 0, Action_lib_harvest = 0,  Action_sharpshooting = 0,
                    nosampled = 5
     )
     if(selectstrat == "Ho"){
@@ -338,7 +340,7 @@ ComHypowSelectH <- function(selectstrat = "SQ", selecthypo = "H1"){
                    repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.0005, juv.sur.var = 0.005, ad.f.sur.var = 0.005, ad.m.sur.var = 0.005, juv.repro.var = 0.005, ad.repro.var = 0.005,
                    WSI = 1,
                    arrival_input = c(0,0,0,0,0,0,0, 0, 0, 0), 
-                   Action_young_bucks = 0, Action_lib_harvest = 0, Action_targetrm = 0, Action_sharpshooting = 0,
+                   Action_young_bucks = 0, Action_lib_harvest = 0,  Action_sharpshooting = 0,
                    nosampled = 125
     )
     if(selectstrat == "PareR" | selectstrat == "SK"){
@@ -383,7 +385,7 @@ params <- list(fawn.an.sur = 0.7, juv.an.sur = 0.8, ad.an.f.sur = 0.82,
              juv.repro.var = 0.005, ad.repro.var = 0.005,
              WSI = 1,
              arrival_input = c(0,0,0,0,0,0,200,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,1,0,0,0), 
-             Action_young_bucks = 1, Action_lib_harvest = 1, Action_targetrm = 1, Action_sharpshooting = 1,
+             Action_young_bucks = 1, Action_lib_harvest = 1,  Action_sharpshooting = 1,
              nosampled = 460
 )
 

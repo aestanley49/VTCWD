@@ -56,13 +56,14 @@ cwd_stoch_wrapper <- function(params, nsims, strat, hypothesis, n.years) {
   sharpshooting.sims <- vector("list", nsims)
   survillance.sims <- vector("list", nsims)
   
-  for(i in 1:nsims){
-    params$arrival_input <- unlist(ArrivalVec$Vec[i])
+  for(m in 1:nsims){
+    vechere <- ArrivalVec[which(ArrivalVec$sim == m),]
+    params$arrival_input <- unlist(vechere$Vec)
     outa <- cwd_stoch_model(params)
-    counts.sims[[i]] <- outa$counts
-    deaths.sims[[i]] <- outa$deaths
-    sharpshooting.sims[[i]] <- outa$sharpshooting
-    survillance.sims[[i]] <- outa$survillance
+    counts.sims[[m]] <- outa$counts
+    deaths.sims[[m]] <- outa$deaths
+    sharpshooting.sims[[m]] <- outa$sharpshooting
+    survillance.sims[[m]] <- outa$survillance
   }
   
   # organize the output into a long data.frame
@@ -88,13 +89,15 @@ cwd_stoch_wrapper <- function(params, nsims, strat, hypothesis, n.years) {
 }
 
 
-
-cwd_stoch_wrapper_setARV <- function(params, nsims,  n.years) {
+cwd_stoch_wrapper_arrvyr1 <- function(params, nsims, strat, hypothesis, n.years) {
   
   if(missing(nsims) == T) warning('nsims not provided')
   if(missing(params) == T) warning('params not provided')
   
   nsims = nsims
+  load("CWD_model_Cross/arrivalvec_yr1.RData")
+  ArrivalVec <- ArrivalVec %>% 
+    filter(Strategy == strat & Hypo == hypothesis)
   
   #pre-allocate the output vectors
   counts.sims <- vector("list", nsims)
@@ -102,12 +105,14 @@ cwd_stoch_wrapper_setARV <- function(params, nsims,  n.years) {
   sharpshooting.sims <- vector("list", nsims)
   survillance.sims <- vector("list", nsims)
   
-  for(i in 1:nsims){
+  for(m in 1:nsims){
+    vechere <- ArrivalVec[which(ArrivalVec$sim == m),]
+    params$arrival_input <- unlist(vechere$Vec)
     outa <- cwd_stoch_model(params)
-    counts.sims[[i]] <- outa$counts
-    deaths.sims[[i]] <- outa$deaths
-    sharpshooting.sims[[i]] <- outa$sharpshooting
-    survillance.sims[[i]] <- outa$survillance
+    counts.sims[[m]] <- outa$counts
+    deaths.sims[[m]] <- outa$deaths
+    sharpshooting.sims[[m]] <- outa$sharpshooting
+    survillance.sims[[m]] <- outa$survillance
   }
   
   # organize the output into a long data.frame
@@ -131,3 +136,149 @@ cwd_stoch_wrapper_setARV <- function(params, nsims,  n.years) {
               survillance = survillance, sharpshooting = sharpshooting, 
               f.R0 = outa$f.R0, m.R0 = outa$m.R0)
 }
+
+cwd_stoch_wrapper_arrvAVG <- function(params, nsims, strat, hypothesis, n.years) {
+  
+  if(missing(nsims) == T) warning('nsims not provided')
+  if(missing(params) == T) warning('params not provided')
+  
+  nsims = nsims
+  load("CWD_model_Cross/arrivalvec_AVG.RData")
+  ArrivalVec <- ArrivalVec %>% 
+    filter(Strategy == strat & Hypo == hypothesis)
+  
+  #pre-allocate the output vectors
+  counts.sims <- vector("list", nsims)
+  deaths.sims <- vector("list", nsims)
+  sharpshooting.sims <- vector("list", nsims)
+  survillance.sims <- vector("list", nsims)
+  
+  for(m in 1:nsims){
+    vechere <- ArrivalVec[which(ArrivalVec$sim == m),]
+    params$arrival_input <- unlist(vechere$Vec)
+    outa <- cwd_stoch_model(params)
+    counts.sims[[m]] <- outa$counts
+    deaths.sims[[m]] <- outa$deaths
+    sharpshooting.sims[[m]] <- outa$sharpshooting
+    survillance.sims[[m]] <- outa$survillance
+  }
+  
+  # organize the output into a long data.frame
+  counts <- melt(counts.sims, id = c("age", "month", "population", "category",
+                                     "year", "sex", "disease")) %>% 
+    dplyr::rename(sim = L1)
+  
+  deaths <- melt(deaths.sims, id = c("age", "month", "population", "category",
+                                     "year", "sex")) %>% 
+    dplyr::rename(sim = L1)
+  
+  survillance <- melt(survillance.sims, id = c("age", "month", "population", "category",
+                                               "year", "sex")) %>% 
+    dplyr::rename(sim = L1)
+  
+  sharpshooting <- melt(sharpshooting.sims, id = c("age", "month", "population", "category",
+                                                   "year", "sex")) %>% 
+    dplyr::rename(sim = L1)
+  
+  out <- list(counts = counts, deaths = deaths, 
+              survillance = survillance, sharpshooting = sharpshooting, 
+              f.R0 = outa$f.R0, m.R0 = outa$m.R0)
+}
+
+
+cwd_stoch_wrapper_setARV <- function(params, nsims,  n.years) {
+  
+  if(missing(nsims) == T) warning('nsims not provided')
+  if(missing(params) == T) warning('params not provided')
+  
+  nsims = nsims
+  ArrivalVec <- ArrivalVecsFunc(n.years, nsims)
+  
+  #pre-allocate the output vectors
+  counts.sims <- vector("list", nsims)
+  deaths.sims <- vector("list", nsims)
+  sharpshooting.sims <- vector("list", nsims)
+  survillance.sims <- vector("list", nsims)
+  
+  for(m in 1:nsims){
+    vechere <- ArrivalVec[which(ArrivalVec$sim == m),]
+    params$arrival_input <- unlist(vechere$Vec)
+    outa <- cwd_stoch_model(params)
+    counts.sims[[m]] <- outa$counts
+    deaths.sims[[m]] <- outa$deaths
+    sharpshooting.sims[[m]] <- outa$sharpshooting
+    survillance.sims[[m]] <- outa$survillance
+  }
+  
+  # organize the output into a long data.frame
+  counts <- melt(counts.sims, id = c("age", "month", "population", "category",
+                                     "year", "sex", "disease")) %>% 
+    dplyr::rename(sim = L1)
+  
+  deaths <- melt(deaths.sims, id = c("age", "month", "population", "category",
+                                     "year", "sex")) %>% 
+    dplyr::rename(sim = L1)
+  
+  survillance <- melt(survillance.sims, id = c("age", "month", "population", "category",
+                                               "year", "sex")) %>% 
+    dplyr::rename(sim = L1)
+  
+  sharpshooting <- melt(sharpshooting.sims, id = c("age", "month", "population", "category",
+                                                   "year", "sex")) %>% 
+    dplyr::rename(sim = L1)
+  
+  out <- list(counts = counts, deaths = deaths, 
+              survillance = survillance, sharpshooting = sharpshooting, 
+              f.R0 = outa$f.R0, m.R0 = outa$m.R0)
+}
+
+
+# used to connect arrival with detection time (connect the sims for each.. )
+cwd_stoch_wrapper_linkarrv <- function(params, nsims, strat, hypothesis, n.years) {
+  
+  if(missing(nsims) == T) warning('nsims not provided')
+  if(missing(params) == T) warning('params not provided')
+  
+  nsims = nsims
+  ArrivalVec <- ArrivalVecsFunc(n.years, nsims)
+  ArrivalVec <- ArrivalVec %>% 
+    filter(Strategy == strat & Hypo == hypothesis)
+  
+  #pre-allocate the output vectors
+  counts.sims <- vector("list", nsims)
+  deaths.sims <- vector("list", nsims)
+  sharpshooting.sims <- vector("list", nsims)
+  survillance.sims <- vector("list", nsims)
+  
+  for(m in 1:nsims){
+    vechere <- ArrivalVec[which(ArrivalVec$sim == m),] ## List was flipped (doesn't matter until try and line it up)
+    params$arrival_input <- unlist(vechere$Vec)
+    outa <- cwd_stoch_model(params)
+    counts.sims[[m]] <- outa$counts
+    deaths.sims[[m]] <- outa$deaths
+    sharpshooting.sims[[m]] <- outa$sharpshooting
+    survillance.sims[[m]] <- outa$survillance
+  }
+  
+  # organize the output into a long data.frame
+  counts <- melt(counts.sims, id = c("age", "month", "population", "category",
+                                     "year", "sex", "disease")) %>% 
+    dplyr::rename(sim = L1)
+  
+  deaths <- melt(deaths.sims, id = c("age", "month", "population", "category",
+                                     "year", "sex")) %>% 
+    dplyr::rename(sim = L1)
+  
+  survillance <- melt(survillance.sims, id = c("age", "month", "population", "category",
+                                               "year", "sex")) %>% 
+    dplyr::rename(sim = L1)
+  
+  sharpshooting <- melt(sharpshooting.sims, id = c("age", "month", "population", "category",
+                                                   "year", "sex")) %>% 
+    dplyr::rename(sim = L1)
+  
+  out <- list(counts = counts, deaths = deaths, 
+              survillance = survillance, sharpshooting = sharpshooting, 
+              f.R0 = outa$f.R0, m.R0 = outa$m.R0, ArrivalVec = ArrivalVec)
+}
+

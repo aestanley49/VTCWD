@@ -147,9 +147,9 @@ CompareAltsFuncwSetH <- function(setstrats = c("SQ", "Ho", "SK", "NoAA"),
     
     # Start constructing the plot
     p <-  ggplot(data = df, aes(x = year, y = harvest))  +
-      geom_line(aes(group = interaction(sim, strategy), color = strategy), size = 0.5, alpha = 0.5)+
+    #  geom_line(aes(group = interaction(sim, strategy), color = strategy), size = 0.5, alpha = 0.5)+
       geom_line(data = mean_sim, aes(x = year, y = harvest, color = as.factor(strategy)), size = 1) +
-      geom_point(data = detected_prev_sims, aes(x = year, y = harvest, fill = as.factor(strategy)), shape = 21, color = "black", size = 3) +
+    #  geom_point(data = detected_prev_sims, aes(x = year, y = harvest, fill = as.factor(strategy)), shape = 21, color = "black", size = 3) +
       geom_point(data = detected_prev_mean, aes(x = year, y = harvest, color = as.factor(strategy))) +
       stat_summary(aes(color = as.factor(strategy)), geom = "ribbon", fun.data = mean_cl_boot, 
                    conf.int = 0.95, alpha = 0.0, linetype = "dashed", size = 0.75) +
@@ -200,14 +200,14 @@ CompareAltsFuncwSetH <- function(setstrats = c("SQ", "Ho", "SK", "NoAA"),
     
     
     p <- ggplot(data = df, aes(x = year, y = n)) + 
-      geom_line(aes(group = interaction(sim, strategy), color = strategy), size = 0.5, alpha = 0.5) +
+   #   geom_line(aes(group = interaction(sim, strategy), color = strategy), size = 0.5, alpha = 0.5) +
       geom_line(data = dat.mean, aes(x = year, y = avg, group = NULL, color = as.factor(strategy)),
                 linewidth = 1) +
       geom_line(data = dat.errors, aes(x = year, y = lo, group = NULL, color = as.factor(strategy)), 
                 linetype = "dashed", linewidth = .75) +
       geom_line(data = dat.errors, aes(x = year, y = hi, group = NULL, color = as.factor(strategy)),
                 linetype = "dashed", linewidth = .75) +
-      geom_point(data = detected_prev_sims, aes(x = year, y = n, fill = as.factor(strategy)), shape = 21, color = "black", size = 3) +
+   #   geom_point(data = detected_prev_sims, aes(x = year, y = n, fill = as.factor(strategy)), shape = 21, color = "black", size = 3) +
       geom_point(data = detected_prev_mean, aes(x = year, y = avg, color = as.factor(strategy))) +
       theme(panel.grid.minor = element_blank(),
             panel.grid.major.x = element_blank(),
@@ -256,14 +256,14 @@ CompareAltsFuncwSetH <- function(setstrats = c("SQ", "Ho", "SK", "NoAA"),
     
     
     p <- ggplot(data = df, aes(x = year, y = prev)) + 
-      geom_line(aes(group = interaction(sim, strategy), color = strategy), size = 0.5, alpha = 0.5) +
+  #    geom_line(aes(group = interaction(sim, strategy), color = strategy), size = 0.5, alpha = 0.5) +
       geom_line(data = dat.mean, aes(x = year, y = avg.prev, group = NULL, color = as.factor(strategy)),
                 linewidth = 1) +
       geom_line(data = dat.errors, aes(x = year, y = lo, group = NULL, color = as.factor(strategy)), 
                 linetype = "dashed", linewidth = .75) +
       geom_line(data = dat.errors, aes(x = year, y = hi, group = NULL, color = as.factor(strategy)),
                 linetype = "dashed", linewidth = .75) +
-      geom_point(data = detected_prev_sims, aes(x = year, y = prev, fill = as.factor(strategy)), shape = 21, color = "black", size = 3) +
+  #    geom_point(data = detected_prev_sims, aes(x = year, y = prev, fill = as.factor(strategy)), shape = 21, color = "black", size = 3) +
       geom_point(data = detected_prev_mean, aes(x = year, y = avg.prev, color = as.factor(strategy))) +
       theme(panel.grid.minor = element_blank(),
             panel.grid.major.x = element_blank(),

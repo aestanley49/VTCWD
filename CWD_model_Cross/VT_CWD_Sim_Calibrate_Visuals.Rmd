@@ -47,7 +47,7 @@ params <- list(fawn.an.sur = 0.7, juv.an.sur = 0.8, ad.an.f.sur = 0.82,
                ini.juv.prev = (2/10000), ini.ad.f.prev = (2/10000),  ini.ad.m.prev = (2/10000),
                n.age.cats = 12,  n.age.cats.m = 10, n.age.cats.f = 15,
                 p = 0.27, env.foi = 0,  beta.f = 0.028,  beta.m = 0.028,
-               theta = 0.9, n0 = 10000, n.years = 30, rel.risk = 1.0,
+               theta = 0.9, n0 = 10000, n.years = 80, rel.risk = 1.0,
                repro.var = 0.005, fawn.sur.var = 0.005, sur.var = 0.005, hunt.var = 0.0005,
                juv.sur.var = 0.005, ad.f.sur.var = 0.005, ad.m.sur.var = 0.005,
              juv.repro.var = 0.005, ad.repro.var = 0.005,
@@ -439,6 +439,58 @@ ggplot(data = sum_prev,
   labs(x = "time (years)", 
        y = "True Prevalence", title = "Prevalence over time")+
   theme_classic()
+
+### Jon's plotting code ----------------------
+
+# plot prevalence over time. 
+plot_stoch_prev_single <- function(dat, all.lines, error.bars){
+  if(missing(dat)==TRUE) warning("missing data to plot")
+  if(missing(all.lines)){all.lines = TRUE}
+  # summarize by year and disease
+  dat.sum <- dat %>%
+    filter(month %% 12 == 1) %>%
+    group_by(year, sim, disease) %>%
+    dplyr::summarize(n = sum(population)) %>%
+    spread(key = disease, value = n) %>%
+    mutate(prev = yes/ (no + yes)) %>%
+    arrange(sim, year)
+  # calculate mean, lo and hi percentiles.
+  dat.mean <- dat.sum %>%
+    group_by(year) %>%
+    dplyr::summarize(avg.prev = mean(prev))
+  # Start constructing the plot
+  if(all.lines == TRUE){
+    p <- ggplot(data = dat.sum, aes(x = year, y = prev, group = sim)) +
+      geom_line(color = "grey") +
+      geom_line(data = dat.mean, aes(x = year, y = avg.prev, group = NULL),
+                linewidth = 1, color="black")
+  }
+  if(all.lines == FALSE){
+    p <- ggplot(data = dat.mean, aes(x = year, y = avg.prev, group = NULL)) +
+      geom_line(linewidth = 1)
+  }
+  if(missing(error.bars) == FALSE){
+    # calculate mean, lo and hi percentiles.
+    dat.mean <- dat.sum %>%
+      group_by(year) %>%
+      dplyr::summarize(avg.prev = mean(prev),
+                       lo = quantile(prev, error.bars[1]),
+                       hi = quantile(prev, error.bars[2]))
+    # plot the error bars
+    p <- p + geom_line(data = dat.mean, aes(x = year, y = lo, group = NULL),
+                       linetype = "dashed", color = "black") +
+      geom_line(data = dat.mean, aes(x = year, y = hi, group = NULL),
+                linetype = "dashed", color = "black")
+  }
+  p <- p + xlab("Year") + ylab("Prevalence") + theme_classic(base_size = 14) +
+    ylim(0, 1) +
+    theme_classic()+
+    theme(panel.grid.minor = element_blank(),
+          panel.grid.major.x = element_blank())
+  p
+}
+ 
+plot_stoch_prev_single(simsout$counts)
 
 ```
 

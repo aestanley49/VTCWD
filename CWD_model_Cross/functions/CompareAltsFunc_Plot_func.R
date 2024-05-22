@@ -63,7 +63,7 @@ CompareAltsFunc <- function(setstrats = c("SQ", "Ho", "SK", "NoAA"), plottype = 
                                                   "tidyr", "stringr", "reshape2")) %dopar% {
                                                     
                                                     ## Need to load function into loop, might be worth looking into .export          
-                                                    source("CWD_model_Cross/functions/ComHyposWeights_even.R")
+                                                    source("CWD_model_Cross/functions/ComHypowWeights_even.R")
                                                     
                                                     simsout <- ComHypowWeights_opt2(selectstrat = i)
                                                     

@@ -194,6 +194,94 @@ plot_stoch_harvest <- function(dat, all.lines, error.bars, detectbar, harvesttyp
 
 
 
+plot_stoch_infected_indiv <- function(dat, all.lines, error.bars, detect){
+  if(missing(dat)==TRUE) warning("missing data to plot")
+  if(missing(all.lines)){all.lines = TRUE}
+  if(missing(detect)){detect = TRUE}
+  # summarize by year and disease
+  dat.counts <- dat$counts
+  
+  dat.sum <- dat.counts %>%
+    filter(month %% 12 == 8) %>%
+    filter(!(category == "St.f" | category == "St.m")) %>% 
+    group_by(year, sim) %>%
+    dplyr::summarize(n = sum(population)) %>%
+    arrange(sim, year)
+  
+  # calculate mean, lo and hi percentiles.
+  # calculate the mean
+  dat.mean <- dat.sum %>%
+    group_by(year) %>%
+    dplyr::summarize(avg = mean(n, na.rm = T)) %>% 
+    mutate(year = round_to_half(year))
+  
+  dat.errors <- dat.sum %>%
+    group_by(year) %>%
+    dplyr::summarize(lo = quantile(n, 0.025, na.rm=T),
+                     hi = quantile(n, 0.975, na.rm=T))
+  
+  dat.sum <- dat.sum%>% 
+    mutate(year = round_to_half(year))
+  
+  dect <- dat$survillance
+  
+  
+  detected_prev_sims <- dect %>%
+    filter(population > 0) %>%
+    group_by(sim, year, month) %>%
+    summarise(detectedprev_count = n()) %>% 
+    group_by(sim) %>%
+    summarise(year = min(year))%>% 
+    left_join(dat.sum, by = c("year", "sim"))
+  
+  detected_prev_mean <- dect %>%
+    filter(population > 0) %>%
+    group_by(sim, year, month) %>%
+    summarise(detectedprev_count = n()) %>% 
+    group_by(sim) %>%
+    summarise(year = min(year))%>% 
+    summarise(year = round_to_half(mean(year))) %>% 
+    left_join(dat.mean, by = c("year"))
+  
+  
+  # Start constructing the plot
+  if(all.lines == TRUE){
+    p <- ggplot(data = dat.sum, aes(x = year, y = n, group = sim)) +
+      geom_line(color = "grey") +
+      geom_line(data = dat.mean, aes(x = year, y = avg, group = NULL),
+                linewidth = 1, color="black")
+  }
+  if(all.lines == FALSE){
+    p <- ggplot(data = dat.mean, aes(x = year, y = avg, group = NULL)) +
+      geom_line(linewidth = 1)
+  }
+  ### Not Currently Working... !!!!
+  if(missing(error.bars) == FALSE){
+    # plot the error bars
+    p <- p + geom_line(data = dat.errors, aes(x = year, y = lo, group = NULL),
+                       linetype = "dashed", color = "black") +
+      geom_line(data = dat.errors, aes(x = year, y = hi, group = NULL),
+                linetype = "dashed", color = "black")
+  }
+  if(detect == TRUE){
+    p <- p + 
+      geom_point(data = detected_prev_sims, aes(x = year, y = n, group = sim),
+                 color = "darkslateblue", size = 1) +
+      geom_point(data = detected_prev_mean, aes(x = year, y = avg, group = NULL), color = "mediumblue")
+    
+  }
+  p <- p + xlab("Year") + ylab("No. Infected Individuals") + theme_classic(base_size = 14) +
+    theme_classic()+
+    theme(panel.grid.minor = element_blank(),
+          panel.grid.major.x = element_blank(),
+          axis.text=element_text(size=16), axis.title=element_text(size=20))
+  return(p)
+  
+  
+}
+
+
+
 plot_stoch_abundance <- function(dat, all.lines, error.bars, detect){
   if(missing(dat)==TRUE) warning("missing data to plot")
   if(missing(all.lines)){all.lines = TRUE}
@@ -327,7 +415,8 @@ plot_stoch_prev_single <- function(dat, all.lines, error.bars){
   p <- p + xlab("Year") + ylab("Prevalence") + theme_classic(base_size = 14) +
     theme_classic()+
     theme(panel.grid.minor = element_blank(),
-          panel.grid.major.x = element_blank()) 
+          panel.grid.major.x = element_blank()) +
+    scale_y_continuous(limits = c(0, .2))
   p
 }
 
@@ -414,7 +503,7 @@ plot_abundnace <- function(output){
 
 plot_stoch_harvest <- function(dat, harvesttype){
   ### Find average year disease was detected
-  detected_prev <- output$survillance %>%
+  detected_prev <- dat$survillance %>%
     filter(population > 0) %>%
     group_by(year, month) %>%
     summarise(detectedprev_count = n())
@@ -494,7 +583,7 @@ plot_stoch_harvest <- function(dat, harvesttype){
   p <- ggplot(data = mod_deaths_harv,
               aes(x = year, y = harvest)) +
     geom_line(color = "black", size = 0.5) + 
-    geom_vline(xintercept = arrival_line, color = "red") + # arrival 
+ #   geom_vline(xintercept = arrival_line, color = "red") + # arrival 
     geom_vline(xintercept = Avg_min_year, color = "darkblue") # add line for detection
   
   

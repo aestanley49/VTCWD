@@ -1,0 +1,533 @@
+---
+title: "Diffusion Model"
+author: "Annabelle"
+date: "2024-08-15"
+output: word_document
+---
+
+```{r set up, include=FALSE, echo=FALSE}
+library(sf)
+library(ggplot2)
+library(patchwork)
+```
+
+
+### Variable dictionary 
+- hex
+- hex_sf
+- hex_df
+- mymat
+
+### Set up the simulation
+This is a mock landscape (the size of the hex cells and landscape size aren't important). We start the simulation by randomly starting two of the cells with .3 prevelence CWD 
+```{r start sim, include = FALSE, echo = FALSE}
+# Define a simple bounding box as an sfc object
+sfc <- st_sfc(st_polygon(list(rbind(c(0,0), c(1,0), c(1,1), c(0,1), c(0,0)))))
+
+# Create a hexagonal grid
+hex <- st_make_grid(sfc, cellsize = 0.1, square = FALSE)
+
+# Convert the grid to an sf object
+hex_sf <- st_sf(geometry = hex)
+
+# Add a 'value' column with example values
+hex_sf$value <- seq_along(hex_sf$geometry)  # Ensure this column is numeric and non-NA
+
+# Check for NA values
+if (any(is.na(hex_sf$value))) {
+  stop("NA values detected in the value column.")
+}
+
+# specify value of cells based on seq 
+hex_df <- as.data.frame(hex_sf$value)
+hex_df$prev <- c(0)
+hex_df[c(22,57),2] <- .3
+
+hex_sf$prev <- hex_df$prev
+```
+
+```{r visualize the landscape, include=FALSE}
+plot(hex_sf)
+```
+
+### Growing the disease
+The first step in the simulation is to grow the disease. We use a logistic growth model with a carrying capacity (K) of .4. 
+*I need help setting the parameters here*
+```{r}
+newfunc <- function(r = .1, K = 200, N0 = 5, time = 125){
+  t <- seq(1,time)
+  newN <- c()
+  for(i in t){
+    C = (K*N0)/(K-N0)
+    N = (C*exp(1)^(r*i))/ (1 + ((C/(K)*exp(1)^(r*i))))
+    newN <- c(newN, N)
+  }
+  return(newN)
+}
+prevalence <- newfunc(r = .2, K = .40, N0 = .001, time = 50)
+time = 1:50
+plot(time , prevalence)
+```
+
+
+This is set up as follows in the code: 
+1) for a given prevalence value, we need to know what time set that prevalence is found at
+2) we also want to be able to specify a time and get the prevalence value at that time step
+3) these are put together so each year we can step the prevalence one time step forward
+```{r}
+# given prevalence, return t
+returnt <- function(N, r = .2, K = .40, N0 = .001){
+  t <- -(1/r)*(log( (N0*(K-N)) / (N*(K-N0)) ))
+  return(t)
+}
+# given time, return prevalence
+returnp <- function(t1, r = .2, K = .40, N0 = .001){
+  pt <- K/(1 + ( ((K-N0)/N0)*(exp(1)^(-r*t1)) ) )
+  return(pt)
+}
+
+# combines returnp & returnt functions.. 
+# Need to make sure this only runs if prev is non 0!!
+next_t_prev_func<- function(fakeprev){ #take starting prevalence
+  t0 <- returnt(N = fakeprev) # id what time step it's on
+  t_1 <- t0 + 1 # add one to get to next time step
+  updateprev <- returnp(t_1) # get the updated prevalence associated with that
+  return(updateprev)
+}
+
+### Was running into an issue with NAs being generated when grew too quickly so this fixes that..
+next_t_prev_FIXED_func<- function(fakeprev, r = .2, K = .40, N0 = .001){ #take starting prevalence
+  N = fakeprev
+  t0 <- -(1/r)*(log( (N0*(K-N)) / (N*(K-N0)) )) # id what time step it's on
+  
+  t0 <- returnt(N = fakeprev) # id what time step it's on
+  # If go past 40, returns NAs so need to counter that.. but time steps are totally fucked... 
+  
+  t_1 <- t0 + 1 # add one to get to next time step
+  updateprev <- returnp(t_1) # get the updated prevalence associated with that
+  
+  t[which(is.na(t))] <- .4 # fix NAs.. 
+  updateprev[which(is.na(updateprev))] <- .4 # fix prev values 
+  return(updateprev)
+}
+```
+
+### Run the growth model 
+```{r}
+#need to filter and only run on non 0 cells
+## This doesn't save previous prevalence... 
+for(i in 1:nrow(hex_df)){
+  if(hex_df[i,2] != 0){
+    hex_df[i,2] <- next_t_prev_func(hex_df[i,2])
+  }
+}
+```
+
+
+### Model underpinnings
+We can identify cells that are adjacent to one another and record the diffusion using the following code (this is also used in the disease spread functions)
+```{r}
+## Need to get adjacency matrix...
+mymat <- st_intersects(hex_sf, hex_sf)
+
+# Set up matrix to record diffusion 
+mat_prev <- matrix(NA, nrow(hex_df), nrow(hex_df))
+# set mat prev as diagonal
+diag(mat_prev) <- hex_df$prev 
+```
+
+
+### Spreading the disease
+We use the following equation to model how the disease spreads: (Astor & Adami 1998)
+$P_{ik} (t+1) = \frac{D}{6} \Sigma (P_{ik} (t) - P_{N_{i,j}k} (t)$
+Where: \\
+"$P_{ik} (t)$ is the concentration of substrate $k$ in site $i$, $D$ is a diffusion coefficient($D$< 0.5 to avoid substrate oscillation), and $N{i.j}$ represents the $j$th neighbor of grid element $i$."
+We also identify any negative diffusion that results from the calculation and set that to 0 
+*We need to set the diffusion constant for CWD*
+*The following also assumes a hard boundary, to adjust for this, we can create multiple versions of the same function, but have an indicator in the cells to dictate which function is used (i.e. if it's not a try boundary use function A with 6 neighbors diffusing, but if it is a true boundary, use function B..)*
+```{r}
+## amount of disease left in cell..
+post_diffusion_func <- function(cellno, mat_prev. = mat_prev, mymat. = mymat, D = .2){ # setting diffusion constant..
+  hold <- list()
+  adj <- (unlist(mymat.[cellno])) 
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != cellno]
+  for(j in adj){
+    ## Need to pull concentration out of this.. 
+    hold[j] <- mat_prev.[cellno,cellno] - mat_prev.[j,j]
+  }
+  outsum <- sum(unlist(hold)) 
+  # Can't have negative diffusion
+  if(outsum < 0){
+    outsum <- 0
+  }
+  return(outsum * (D/6))
+}
+
+
+## amount of disease to allocate to neighbooring cells..
+amount_to_allocate_func <- function(cellno, mat_prev. = mat_prev, mymat. = mymat, D = .2){
+  adj <- (unlist(mymat.[cellno])) 
+  diff <- mat_prev.[cellno,cellno] - post_diffusion_func(cellno, mat_prev, mymat, D = .2)
+  return(diff/length(adj)) ## currently a hard boundary
+}
+
+### Currently being buggy.. 
+amount_to_allocate_func2 <- function(cellno, mat_prev. = mat_prev, mymat. = mymat, D = .2){
+  adj <- (unlist(mymat.[cellno])) 
+  #setting diffusion constant..
+  hold <- list()
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != cellno]
+  for(j in adj){
+    ## Need to pull concentration out of this.. 
+    hold[j] <- mat_prev.[cellno,cellno] - mat_prev.[j,j]
+  }
+  outsum <- sum(unlist(hold), na.rm = TRUE) # will generate NULLS & NAs but that's fine
+  # Can't have negative diffusion
+  if(outsum < 0){
+    outsum <- 0
+  }
+  post_diffusion_amount <- (outsum * (D/6))
+  diff <- mat_prev.[cellno,cellno] - post_diffusion_amount
+  return(diff/length(adj)) ## currently a hard boundary
+}
+```
+
+
+
+### Identifying Neighboors
+```{r}
+## Need to get adjacency matrix...
+mymat <- st_intersects(hex_sf, hex_sf)
+
+# Set up matrix to record diffusion 
+mat_prev <- matrix(NA, nrow(hex_df), nrow(hex_df))
+# set mat prev as diagonal
+diag(mat_prev) <- hex_df$prev 
+```
+
+
+### Run the diffusion model 
+!!!!! prevalence needs a data structure that is temporal !!*****
+```{r}
+### ### Now need to iterate through matrix, allocate new prevalence values 
+mat_prev2 <- mat_prev ## Need to fix this to make temporal... 
+for(i in 1:nrow(mat_prev)){
+  endprev <- post_diffusion_func(i, mat_prev, mymat, D = .2)
+  mat_prev2[i,i] <- endprev # overwrite prevalence 
+  adj <- (unlist(mymat[i])) 
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != i]
+  share_prev <- amount_to_allocate_func(i, mat_prev, mymat, D = .2)
+  for(n in adj){
+    mat_prev2[i,n] <- share_prev # write in added prevalence
+  }
+}
+
+### then sum columns to get new prevalence 
+newprevvales <- colSums(mat_prev2, na.rm = TRUE)
+
+hex_sf$prev <- newprevvales
+```
+
+### Updated viusal
+```{r landscape update, include=FALSE}
+plot(hex_sf)
+```
+
+
+
+
+
+### Adding a time step 
+**Question - do we want to save/record previous prevalence in certain cells?** 
+```{r, warning=FALSE}
+### ### ### Set up
+noyears <- 50 # no years 
+
+### Create grid 
+# Convert the grid to an sf object
+hex_sf <- st_sf(geometry = hex)
+
+# Add a 'value' column with example values
+hex_sf$value <- seq_along(hex_sf$geometry)  # Ensure this column is numeric and non-NA
+
+# Check for NA values
+if (any(is.na(hex_sf$value))) {
+  stop("NA values detected in the value column.")
+}
+
+# specify value of cells based on seq 
+hex_df <- as.data.frame(hex_sf$value)
+hex_df$prev <- c(0)
+hex_df[c(22,57),2] <- .3
+
+hex_sf$prev <- hex_df$prev
+
+### Replicate over as many time steps as needed
+og_landscape_list <- replicate(noyears, hex_sf, simplify = FALSE)
+
+## Need to get adjacency matrix...
+mymat_adj <- st_intersects(hex_sf, hex_sf)
+
+# Set up matrix to record diffusion 
+mat_prev <- matrix(NA, nrow(hex_df), nrow(hex_df))
+
+mat_prev_list <- replicate((noyears + 1), mat_prev, simplify = FALSE)
+
+### ### ### Run over time loop 
+
+for(t in 1:50){
+  
+# Grow the disease 
+for(i in 1:nrow(hex_df)){
+  if(hex_df[i,2] != 0){
+    hex_df[i,2] <- next_t_prev_FIXED_func(hex_df[i,2])
+  }
+}
+
+# set mat prev as diagonal
+diag(mat_prev_list[[t]]) <- hex_df$prev 
+
+for(i in 1:nrow(mat_prev_list[[t]])){
+  endprev <- post_diffusion_func(i, mat_prev_list[[t]], mymat_adj, D = .2)
+  mat_prev_list[[t+1]][i,i] <- endprev # overwrite prevalence 
+  adj <- (unlist(mymat_adj[i])) 
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != i]
+  share_prev <- amount_to_allocate_func2(i, mat_prev_list[[t]], mymat_adj, D = .2)
+  for(n in adj){
+    mat_prev_list[[t+1]][i,n] <- share_prev # write in added prevalence
+  }
+}
+
+### then sum columns to get new prevalence 
+newprevvales <- colSums(mat_prev_list[[t+1]], na.rm = TRUE)
+
+og_landscape_list[[t]]$prev <- hex_df$prev <- newprevvales
+
+}
+```
+
+Visualize first 10 time steps
+```{r}
+# List to store individual plots
+plot_list <- vector("list", 10)
+
+# Create a plot for each spatial object and store in plot_list
+for (i in 1:10) {
+  plot_list[[i]] <- ggplot(data = og_landscape_list[[i]]) +
+     geom_sf(aes(fill = prev), show.legend = i == 10) +  # Only show legend on the first plot
+    labs(title = paste("Time Step", i), fill = "Prev Value")
+}
+
+# Combine all plots using patchwork
+combined_plot <- wrap_plots(plot_list, ncol = 5)  # Adjust ncol as needed
+
+# Display the combined plot
+print(combined_plot)
+
+#plot(og_landscape_list[[3]]["prev"])
+```
+
+
+### Set up a soft boundary (ie continue diffusion past edge) and a hard boundary (disease bounces back)
+
+#### Amount to allocate to selected cell
+```{r}
+amount_to_allocate_softbound_func <- function(cellno, mat_prev. = mat_prev, mymat. = mymat, D = .2){
+  adj <- (unlist(mymat.[cellno])) 
+  #setting diffusion constant..
+  if(length(adj) == 6){ ### For all normal (non boundary cells, BAU)
+      hold <- list()
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != cellno]
+  for(j in adj){
+    ## Need to pull concentration out of this.. 
+    hold[j] <- mat_prev.[cellno,cellno] - mat_prev.[j,j]
+  }
+  outsum <- sum(unlist(hold), na.rm = TRUE) 
+  # Can't have negative diffusion
+  if(outsum < 0){
+    outsum <- 0
+  }
+  post_diffusion_amount <- (outsum * (D/6))
+  diff <- mat_prev.[cellno,cellno] - post_diffusion_amount
+  return(diff/6) ## soft boundary
+  } else {   ### For boundary cells
+    
+  }
+  hold <- list()
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != cellno]
+  for(j in adj){
+    ## Need to pull concentration out of this.. 
+    hold[j] <- mat_prev.[cellno,cellno] - mat_prev.[j,j]
+  }
+  outsum <- sum(unlist(hold), na.rm = TRUE) 
+  # Can't have negative diffusion
+  if(outsum < 0){
+    outsum <- 0
+  }
+  post_diffusion_amount <- (outsum * (D/6))
+  diff <- mat_prev.[cellno,cellno] - post_diffusion_amount
+  return(diff/6) ## soft boundary
+}
+
+amount_to_allocate_hardbound_func <- function(cellno, mat_prev. = mat_prev, mymat. = mymat, D = .2){
+  adj <- (unlist(mymat.[cellno])) 
+  #setting diffusion constant..
+  hold <- list()
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != cellno]
+  for(j in adj){
+    ## Need to pull concentration out of this.. 
+    hold[j] <- mat_prev.[cellno,cellno] - mat_prev.[j,j]
+  }
+  outsum <- sum(unlist(hold), na.rm = TRUE) 
+  # Can't have negative diffusion
+  if(outsum < 0){
+    outsum <- 0
+  }
+  post_diffusion_amount <- (outsum * (D/(length(adj))))
+  diff <- mat_prev.[cellno,cellno] - post_diffusion_amount
+  return(diff/length(adj)) ## hard boundary
+}
+```
+#### Amount to allocate to neighbooring cells
+```{r}
+post_diffusion_soft_func <- function(cellno, mat_prev. = mat_prev, mymat. = mymat, D = .2){ # setting diffusion constant..
+  adj <- (unlist(mymat.[cellno])) 
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != cellno]
+  
+  ### For all normal (non boundary cells, BAU)
+  if(length(adj) == 6){
+    hold <- list()
+    for(j in adj){
+    ## Need to pull concentration out of this.. 
+    hold[j] <- mat_prev.[cellno,cellno] - mat_prev.[j,j]
+    }
+  outsum <- sum(unlist(hold)) 
+  # Can't have negative diffusion
+    if(outsum < 0){
+    outsum <- 0
+    }
+  } else {   ### For boundary cells
+    hold <- list()
+    for(j in adj){
+    ## Need to pull concentration out of this.. 
+    hold[j] <- mat_prev.[j,j]
+    }
+    outsum <- mean(unlist(hold), na.rm = TRUE) ### ASUMPTION - setting boundary cell prev to avg value of neighboring cells 
+  }
+
+  return(outsum * (D/6))
+}
+```
+
+
+### Repeat the above but with a hard boundary
+```{r}
+
+### ### ### Set up 
+
+# Define a simple bounding box as an sfc object
+sfc <- st_sfc(st_polygon(list(rbind(c(0,0), c(1,0), c(1,1), c(0,1), c(0,0)))))
+
+# Create a hexagonal grid
+hex <- st_make_grid(sfc, cellsize = 0.1, square = FALSE)
+
+# Convert the grid to an sf object
+hex_sf <- st_sf(geometry = hex)
+
+# Add a 'value' column with example values
+hex_sf$value <- seq_along(hex_sf$geometry)  # Ensure this column is numeric and non-NA
+
+# Check for NA values
+if (any(is.na(hex_sf$value))) {
+  stop("NA values detected in the value column.")
+}
+
+# specify value of cells based on seq 
+hex_df <- as.data.frame(hex_sf$value)
+hex_df$prev <- c(0)
+hex_df[c(22,57),2] <- .3
+
+hex_sf$prev <- hex_df$prev
+
+
+
+## Need to get adjacency matrix...
+mymat <- st_intersects(hex_sf, hex_sf)
+
+# Set up matrix to record diffusion 
+mat_prev <- matrix(NA, nrow(hex_df), nrow(hex_df))
+# set mat prev as diagonal
+diag(mat_prev) <- hex_df$prev 
+
+
+### ### ### Run over time loop 
+
+for(t in 1:1){
+  
+# Grow the disease 
+for(i in 1:nrow(hex_df)){
+  if(hex_df[i,2] != 0){
+    hex_df[i,2] <- next_t_prev_FIXED_func(hex_df[i,2])
+  }
+}
+
+# set mat prev as diagonal
+diag(mat_prev_list[[t]]) <- hex_df$prev 
+
+for(i in 1:nrow(mat_prev_list[[t]])){
+  endprev <- post_diffusion_func(i, mat_prev_list[[t]], mymat_adj, D = .2)
+  mat_prev_list[[t+1]][i,i] <- endprev # overwrite prevalence 
+  adj <- (unlist(mymat_adj[i])) 
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != i]
+  share_prev <- amount_to_allocate_softbound_func(i, mat_prev_list[[t]], mymat_adj, D = .2)
+  for(n in adj){
+    mat_prev_list[[t+1]][i,n] <- share_prev # write in added prevalence
+  }
+}
+
+### then sum columns to get new prevalence 
+newprevvales <- colSums(mat_prev_list[[t+1]], na.rm = TRUE)
+
+og_landscape_list[[t]]$prev <- hex_df$prev <- newprevvales
+
+plot(og_landscape_list[[t]]["prev"]); View(as.data.frame(hex_df$prev))
+
+}
+
+# plot(og_landscape_list[[t]]["prev"]); View(as.data.frame(hex_df$prev))
+
+
+### ### ### Print plots
+# List to store individual plots
+plot_list <- vector("list", 30)
+
+# Create a plot for each spatial object and store in plot_list
+for (i in 1:30) {
+  plot_list[[i]] <- ggplot(data = og_landscape_list[[i]]) +
+     geom_sf(aes(fill = prev), show.legend = i == 10) +  # Only show legend on the first plot
+    labs(title = paste("Time Step", i), fill = "Prev Value")
+}
+
+# Combine all plots using patchwork
+combined_plot <- wrap_plots(plot_list, ncol = 5)  # Adjust ncol as needed
+
+# Display the combined plot
+print(combined_plot)
+
+```
+
+
+### Now set a soft boundary on 3 sides and a hard boundary on 1 side
+
+
+
+### Apply to Northeast landscape

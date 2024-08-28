@@ -1,0 +1,114 @@
+---
+title: "DifferentArrivalVectors"
+output: pdf_document
+date: "2024-05-21"
+---
+
+
+Load in file and libraries 
+```{r, message = FALSE, warning=FALSE}
+source("CWD_model_Cross/functions/est_beta_params.R")
+source("CWD_model_Cross/functions/allocate_deaths.R")
+source("CWD_model_Cross/functions/MyFunctions.R")
+source("CWD_model_Cross/cwd_stoch_model_cal_act.r")
+source("CWD_model_Cross/ArrivalVectors.R")
+source("CWD_model_Cross/functions/cwd_stoch_wrapper_mod.r")
+source("CWD_model_Cross/functions/ComHypowSelectH.R") # 2 different functions for setting parameters
+source("CWD_model_Cross/functions/ComHypowWeights_even.R") # 2 different functions for setting parameters
+source("CWD_model_Cross/functions/Plot_funcs.R") # Basic Plots
+source("CWD_model_Cross/functions/CompareAltsFuncwSetH_Plot_func.R") # use for multi strat single H
+source("CWD_model_Cross/functions/CompareAltsFunc_Plot_func.R") # use for multi strat across multi H
+
+source("CWD_model_Cross/functions/ComHypowAVGarrv.R") # use for multi strat single H
+source("CWD_model_Cross/functions/CompareAltsFunc_Plot_AVGarrfunc.R") # average arrival vect
+
+source("CWD_model_Cross/functions/ComHypowarrvyr1.R") # arrive year 1
+source("CWD_model_Cross/functions/CompareAltsFunc_Plot_arrvyr1func.R") # arrive year 1
+
+library(foreach)
+library(doParallel)
+library(tidyverse)
+library(reshape2)
+library(patchwork)
+```
+
+
+The goal of this document is to test what happens to the results of the CWD simulation model when different arrival vectors are used. We look at 
+Option 1) The current way that arrival vectors are generated: This is the most stochastic method where different arrival vectors are drawn for each strategy and hypothesis for every simulation. The arrival vectors are different every time
+Option 2) The average arrival vector for each hypotheis is used for every simulation 
+Option 3) An arrival vector where the disease arrives in the first year is generated for each unique hypothesis and strategy (same functions as 1, but the results have been filtered). Due to generation issues, the same 15 arrival vectors are repeated for each strategy-hypothesis combination
+Option 4) arrives after year 10 - *still running... not going to work..*
+Option 5) The disease arrives after year 20 (note this is just hypothesis 3)
+
+### 1 current results 
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 1. Option 1"}
+CompareAltsFunc(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "prevalence")
+
+```
+
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 2. Option 1"}
+CompareAltsFunc(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "abundance")
+
+```
+
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 3. Option 1"}
+CompareAltsFunc(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "harvest")
+
+```
+
+
+### 2 AVG arrival 
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 1. Option 1"}
+CompareAltsFunc_AVGarr(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "prevalence")
+
+```
+
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 2. Option 1"}
+CompareAltsFunc_AVGarr(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "abundance")
+
+```
+
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 3. Option 1"}
+CompareAltsFunc_AVGarr(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "harvest")
+
+```
+
+### 3 arrival year 1 
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 1. Option 1"}
+CompareAltsFunc_arryr1(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "prevalence")
+
+```
+
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 2. Option 1"}
+CompareAltsFunc_arryr1(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "abundance")
+
+```
+
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure 3. Option 1"}
+CompareAltsFunc_arryr1(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "harvest")
+
+```
+
+### Option 5 - post year 20 
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure XX. Option 5"}
+CompareAltsFuncwSetH(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "prevalence", SetH = "H3")
+```
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure XX. Option 5"}
+CompareAltsFuncwSetH(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "abundance", SetH = "H3")
+```
+
+
+```{r, message = FALSE, warning=FALSE, fig.cap= "Figure XX. Option 5"}
+CompareAltsFuncwSetH(setstrats = c("SQ", "Ho", "SK", "NoAA", "PareR", "PventR", "SA"), plottype = "harvest", SetH = "H3")
+```

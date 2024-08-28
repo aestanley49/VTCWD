@@ -194,13 +194,24 @@ CompareAltsFunc <- function(setstrats = c("SQ", "Ho", "SK", "NoAA"), plottype = 
   
   ### Pull together dataframes  plots  ------ Abundance
   if(plottype == "abundance"){  
+    
+    df$strategy <- factor(df$strategy, 
+      levels = c("SQ", "SA", "PventR", "NoAA", "Ho", "PareR", "SK"), 
+      labels = c("Status Quo", "Stop Arrival", "Prevent and React", "No VAAFM", "Heavy Outreach",  "Prepare and React", "Kitchen Sink") )
+    
+    dect$strategy <- factor(dect$strategy, 
+                          levels = c("SQ", "SA", "PventR", "NoAA", "Ho", "PareR", "SK"), 
+                          labels = c("Status Quo", "Stop Arrival", "Prevent and React", "No VAAFM", "Heavy Outreach",  "Prepare and React", "Kitchen Sink") )
+    
     dat.mean <- df %>%
       group_by(strategy, year) %>%
+      mutate(n = n/4) %>% ## need to adjust for the 4 hypotheses
       dplyr::summarize(avg = mean(n, na.rm = T)) %>% 
       mutate(year = round_to_half(year))
     
     dat.errors <- df %>%
       group_by(strategy, year) %>%
+      mutate(n = n/4) %>% ## need to adjust for the 4 hypotheses
       dplyr::summarize(lo = quantile(n, 0.025, na.rm=T),
                        hi = quantile(n, 0.975, na.rm=T))
     
@@ -242,6 +253,7 @@ CompareAltsFunc <- function(setstrats = c("SQ", "Ho", "SK", "NoAA"), plottype = 
             axis.text=element_text(size=16), axis.title=element_text(size=20)) + 
       xlab("Year") + ylab("Abundance") + 
       theme_classic(base_size = 14) +
+      labs(color = "Strategy")+
       theme_classic()
     
     
@@ -250,6 +262,15 @@ CompareAltsFunc <- function(setstrats = c("SQ", "Ho", "SK", "NoAA"), plottype = 
   
   ### Pull together dataframes  plots  ------ prevalence
   if(plottype == "prevalence"){  
+    
+    df$strategy <- factor(df$strategy, 
+                          levels = c("SQ", "SA", "PventR", "NoAA", "Ho", "PareR", "SK"), 
+                          labels = c("Status Quo", "Stop Arrival", "Prevent and React", "No VAAFM", "Heavy Outreach",  "Prepare and React", "Kitchen Sink") )
+    
+    dect$strategy <- factor(dect$strategy, 
+                            levels = c("SQ", "SA", "PventR", "NoAA", "Ho", "PareR", "SK"), 
+                            labels = c("Status Quo", "Stop Arrival", "Prevent and React", "No VAAFM", "Heavy Outreach",  "Prepare and React", "Kitchen Sink") )
+    
     dat.mean <- df %>%
       group_by(strategy, year) %>%
       dplyr::summarize(avg.prev = mean(prev, na.rm = T)) %>% 
@@ -298,6 +319,8 @@ CompareAltsFunc <- function(setstrats = c("SQ", "Ho", "SK", "NoAA"), plottype = 
             axis.text=element_text(size=16), axis.title=element_text(size=20)) + 
       xlab("Year") + ylab("Prevalence") + 
       theme_classic(base_size = 14) +
+      labs(color = "Strategy")+
+      ylim(0, .03)+
       theme_classic()
     
     

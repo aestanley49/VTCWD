@@ -193,5 +193,3 @@ return(arrivalvec2)
   
 }
   
-
-

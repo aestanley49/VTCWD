@@ -162,7 +162,7 @@ allharv_wo <- plot_stoch_harvest(simsout_wo_act,  harvesttype= 1)
 
 antlerless_wo <- plot_stoch_harvest(simsout_wo_act,  harvesttype= 3)
 
-antlerlessplot <- (allharv_w + allharv_wo) / (antlerless_w + antlerless_wo)
+antlerlessplot <- (antlerless_w + antlerless_wo)
 
 ggsave(plot = antlerlessplot, "CWD_model_Cross/MayWorkshopPlots/antlerlessplot.png",
        width = 6, height = 4)
@@ -210,7 +210,7 @@ params <- list(fawn.an.sur = 0.7, juv.an.sur = 0.8, ad.an.f.sur = 0.82,
 simsout_w_act <- cwd_stoch_wrapper_setARV(params, nsims = 30, n.years = 25)
 allharv_w <- plot_stoch_harvest(simsout_w_act,  harvesttype= 1)
 
-juvharv_w <- plot_stoch_harvest(simsout_w_act,  harvesttype= 2)
+juvharv_w <- plot_stoch_harvest(simsout_w_act,  harvesttype= 2, detectbar)
 antlerless_w <- plot_stoch_harvest(simsout_w_act, all.lines, error.bars, detectbar, harvesttype= 3)
 
 abund_w <- plot_stoch_abundance(simsout_w_act, all.lines = TRUE, error.bars)
@@ -221,13 +221,13 @@ params$Action_young_bucks <- 0
 simsout_wo_act <- cwd_stoch_wrapper_setARV(params, nsims = 30, n.years = 25)
 allharv_wo <- plot_stoch_harvest(simsout_wo_act,  harvesttype= 1)
 
-juvharv_wo <- plot_stoch_harvest(simsout_wo_act,  harvesttype= 2)
+juvharv_wo <- plot_stoch_harvest(simsout_wo_act,  harvesttype= 2, all.lines = FALSE, detectbar)
 antlerless_wo <- plot_stoch_harvest(simsout_wo_act, all.lines, error.bars, detectbar, harvesttype= 3)
 
 abund_wo <- plot_stoch_abundance(simsout_wo_act, all.lines = TRUE, error.bars)
 
 
-juvharvplot <- (allharv_w + allharv_wo) / (juvharv_w + juvharv_wo)
+juvharvplot <- (juvharv_w + juvharv_wo)
 
 ggsave(plot = juvharvplot, "CWD_model_Cross/MayWorkshopPlots/juvharvplot.png",
        width = 6, height = 4)

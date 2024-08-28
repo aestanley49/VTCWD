@@ -46,31 +46,38 @@ ComHypowWeights_arrvyr1 <- function(selectstrat = "SQ"){
     }
   }
   
-  
-  simsout1 <- cwd_stoch_wrapper_arrvyr1(params, nsims = 50, n.years = 25, strat = selectstrat, hypothesis = "H1")
-  simsout2 <- cwd_stoch_wrapper_arrvyr1(params, nsims = 50, n.years = 25, strat = selectstrat, hypothesis = "H2")
-  simsout3 <- cwd_stoch_wrapper_arrvyr1(params, nsims = 50, n.years = 25, strat = selectstrat, hypothesis = "H3")
-  simsout4 <- cwd_stoch_wrapper_arrvyr1(params, nsims = 50, n.years = 25, strat = selectstrat, hypothesis = "H4")
-  
-  simsout4$counts <- simsout1$counts %>% 
-    full_join(simsout2$counts, by = c("age", "month","category","year","sex","disease","sim", "population")) %>% 
-    full_join(simsout3$counts, by = c("age", "month","category","year","sex","disease","sim", "population")) %>% 
-    full_join(simsout4$counts, by = c("age", "month","category","year","sex","disease","sim", "population")) 
-  
-  simsout4$deaths <- simsout1$deaths %>% 
-    full_join(simsout2$deaths, by = c("age", "month","category","year","sex","sim", "population")) %>% 
-    full_join(simsout3$deaths, by = c("age", "month","category","year","sex","sim", "population")) %>% 
-    full_join(simsout4$deaths, by = c("age", "month","category","year","sex","sim", "population")) 
-  
-  simsout4$survillance <- simsout1$survillance %>% 
-    full_join(simsout2$survillance, by = c("age", "month","category","year","sex","sim", "population")) %>% 
-    full_join(simsout3$survillance, by = c("age", "month","category","year","sex","sim", "population")) %>% 
-    full_join(simsout4$survillance, by = c("age", "month","category","year","sex","sim", "population")) 
-  
-  simsout4$sharpshooting <- simsout1$sharpshooting %>% 
-    full_join(simsout2$sharpshooting, by = c("age", "month","category","year","sex","sim", "population")) %>% 
-    full_join(simsout3$sharpshooting, by = c("age", "month","category","year","sex","sim", "population")) %>% 
-    full_join(simsout4$sharpshooting, by = c("age", "month","category","year","sex","sim", "population")) 
+  if(selectstrat == "SA" | selectstrat == "SK"){
+    
+    simsout4 <- cwd_stoch_wrapper_arrvyr1(params, nsims = 50, n.years = 25, strat = selectstrat, hypothesis = "H1")
+   
+  }else{
+    
+    simsout1 <- cwd_stoch_wrapper_arrvyr1(params, nsims = 50, n.years = 25, strat = selectstrat, hypothesis = "H1")
+    simsout2 <- cwd_stoch_wrapper_arrvyr1(params, nsims = 50, n.years = 25, strat = selectstrat, hypothesis = "H2")
+    # simsout3 <- cwd_stoch_wrapper_arrvyr1(params, nsims = 50, n.years = 25, strat = selectstrat, hypothesis = "H3")
+    simsout4 <- cwd_stoch_wrapper_arrvyr1(params, nsims = 50, n.years = 25, strat = selectstrat, hypothesis = "H4")
+    
+    simsout4$counts <- simsout1$counts %>% 
+      full_join(simsout2$counts, by = c("age", "month","category","year","sex","disease","sim", "population")) %>% 
+      #  full_join(simsout3$counts, by = c("age", "month","category","year","sex","disease","sim", "population")) %>% 
+      full_join(simsout4$counts, by = c("age", "month","category","year","sex","disease","sim", "population")) 
+    
+    simsout4$deaths <- simsout1$deaths %>% 
+      full_join(simsout2$deaths, by = c("age", "month","category","year","sex","sim", "population")) %>% 
+      #  full_join(simsout3$deaths, by = c("age", "month","category","year","sex","sim", "population")) %>% 
+      full_join(simsout4$deaths, by = c("age", "month","category","year","sex","sim", "population")) 
+    
+    simsout4$survillance <- simsout1$survillance %>% 
+      full_join(simsout2$survillance, by = c("age", "month","category","year","sex","sim", "population")) %>% 
+      #  full_join(simsout3$survillance, by = c("age", "month","category","year","sex","sim", "population")) %>% 
+      full_join(simsout4$survillance, by = c("age", "month","category","year","sex","sim", "population")) 
+    
+    simsout4$sharpshooting <- simsout1$sharpshooting %>% 
+      full_join(simsout2$sharpshooting, by = c("age", "month","category","year","sex","sim", "population")) %>% 
+      #   full_join(simsout3$sharpshooting, by = c("age", "month","category","year","sex","sim", "population")) %>% 
+      full_join(simsout4$sharpshooting, by = c("age", "month","category","year","sex","sim", "population")) 
+    
+  }
   
   return(simsout4)
 }

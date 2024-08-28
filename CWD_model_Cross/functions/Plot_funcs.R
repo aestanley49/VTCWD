@@ -131,7 +131,7 @@ plot_stoch_harvest <- function(dat, all.lines, error.bars, detectbar, harvesttyp
   
   p <- ggplot(data = mod_deaths_harv,
               aes(x = year, y = harvest)) +
-    geom_line(aes(group = sim), color = "grey", size = 0.5) +
+  #  geom_line(aes(group = sim), color = "grey", size = 0.5) +
     geom_line(data = mean_sim, color = "black", size = 1) +
     stat_summary(geom="ribbon", fun.data = mean_cl_boot, 
                  conf.int=0.95, alpha = 0.0, linetype = "dashed", color = "black", size = .75)
@@ -165,9 +165,10 @@ plot_stoch_harvest <- function(dat, all.lines, error.bars, detectbar, harvesttyp
       left_join(mean_sim, by = c("year"))
     
     p <- p + 
-      geom_point(data = detected_prev_sims, aes(x = year, y = harvest, group = sim),
-                 color = "darkslateblue", size = 1) +
-      geom_point(data = detected_prev_mean, aes(x = year, y = harvest, group = NULL), color = "mediumblue")
+    #  geom_point(data = detected_prev_sims, aes(x = year, y = harvest, group = sim),
+    #             color = "darkslateblue", size = 1) +
+      geom_vline(xintercept = Avg_min_year, color = "darkblue")  # add line for detection
+     # geom_point(data = detected_prev_mean, aes(x = year, y = harvest, group = NULL), color = "mediumblue")
     
   }
   
@@ -177,8 +178,9 @@ plot_stoch_harvest <- function(dat, all.lines, error.bars, detectbar, harvesttyp
       theme_classic() 
   }else if(harvesttype == 2){
     p <- p +  labs(x = "time (years)", 
-                   y = "harvest", title = "Total Juvinille Male Harvest per Year")+
-      theme_classic() 
+                   y = "harvest", title = "Yearly Juvenile Male Harvest")+
+      theme_classic() +
+      ylim(0, 300)
     
   }else if(harvesttype == 3){    
     p <- p +  labs(x = "time (years)", 
@@ -274,7 +276,8 @@ plot_stoch_infected_indiv <- function(dat, all.lines, error.bars, detect){
     theme_classic()+
     theme(panel.grid.minor = element_blank(),
           panel.grid.major.x = element_blank(),
-          axis.text=element_text(size=16), axis.title=element_text(size=20))
+          axis.text=element_text(size=16), axis.title=element_text(size=20)) + 
+    ylim(0, 600)
   return(p)
   
   
@@ -599,7 +602,8 @@ plot_stoch_harvest <- function(dat, harvesttype){
   }else if(harvesttype == 3){    
     p <- p +  labs(x = "time (years)", 
                    y = "harvest", title = "Total Antlerless Harvest per Year")+
-      theme_classic() 
+      theme_classic() +
+      ylim(30000, 40000)
   }
   
   return(p)

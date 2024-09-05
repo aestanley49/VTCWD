@@ -70,45 +70,15 @@ plot(time , prevalence)
 ```
 
 
-This is set up as follows in the code: 
-1) for a given prevalence value, we need to know what time set that prevalence is found at
-2) we also want to be able to specify a time and get the prevalence value at that time step
-3) these are put together so each year we can step the prevalence one time step forward
+This is set up as follows in the code: step the prevalence one time step forward
 ```{r}
-# given prevalence, return t
-returnt <- function(N, r = .2, K = .40, N0 = .001){
-  t <- -(1/r)*(log( (N0*(K-N)) / (N*(K-N0)) ))
-  return(t)
-}
-# given time, return prevalence
-returnp <- function(t1, r = .2, K = .40, N0 = .001){
-  pt <- K/(1 + ( ((K-N0)/N0)*(exp(1)^(-r*t1)) ) )
-  return(pt)
-}
-
-# combines returnp & returnt functions.. 
-# Need to make sure this only runs if prev is non 0!!
-next_t_prev_func<- function(fakeprev){ #take starting prevalence
-  t0 <- returnt(N = fakeprev) # id what time step it's on
-  t_1 <- t0 + 1 # add one to get to next time step
-  updateprev <- returnp(t_1) # get the updated prevalence associated with that
-  return(updateprev)
-}
-
-### Was running into an issue with NAs being generated when grew too quickly so this fixes that..
-next_t_prev_FIXED_func<- function(fakeprev, r = .2, K = .40, N0 = .001){ #take starting prevalence
-  N = fakeprev
-  t0 <- -(1/r)*(log( (N0*(K-N)) / (N*(K-N0)) )) # id what time step it's on
-  
-  t0 <- returnt(N = fakeprev) # id what time step it's on
-  # If go past 40, returns NAs so need to counter that.. but time steps are totally fucked... 
-  
-  t_1 <- t0 + 1 # add one to get to next time step
-  updateprev <- returnp(t_1) # get the updated prevalence associated with that
-  
-  t[which(is.na(t))] <- .4 # fix NAs.. 
-  updateprev[which(is.na(updateprev))] <- .4 # fix prev values 
-  return(updateprev)
+logistic_reg_closed_func <- function(Nt0, r = .2, K = .4){
+  Nt1 <- Nt0 * (1 + (r * (1 - (Nt0/K))))
+  if(Nt1 > .4){
+    Nt1 <- .4 ## implement cap
+  }
+    
+  return(Nt1)
 }
 ```
 
@@ -118,7 +88,7 @@ next_t_prev_FIXED_func<- function(fakeprev, r = .2, K = .40, N0 = .001){ #take s
 ## This doesn't save previous prevalence... 
 for(i in 1:nrow(hex_df)){
   if(hex_df[i,2] != 0){
-    hex_df[i,2] <- next_t_prev_func(hex_df[i,2])
+    hex_df[i,2] <- logistic_reg_closed_func(hex_df[i,2])
   }
 }
 ```
@@ -209,10 +179,9 @@ diag(mat_prev) <- hex_df$prev
 
 
 ### Run the diffusion model 
-!!!!! prevalence needs a data structure that is temporal !!*****
 ```{r}
 ### ### Now need to iterate through matrix, allocate new prevalence values 
-mat_prev2 <- mat_prev ## Need to fix this to make temporal... 
+mat_prev2 <- mat_prev ## Note, this is temporal when add years
 for(i in 1:nrow(mat_prev)){
   endprev <- post_diffusion_func(i, mat_prev, mymat, D = .2)
   mat_prev2[i,i] <- endprev # overwrite prevalence 
@@ -283,7 +252,7 @@ for(t in 1:50){
 # Grow the disease 
 for(i in 1:nrow(hex_df)){
   if(hex_df[i,2] != 0){
-    hex_df[i,2] <- next_t_prev_FIXED_func(hex_df[i,2])
+    hex_df[i,2] <- logistic_reg_closed_func(hex_df[i,2])
   }
 }
 
@@ -475,7 +444,7 @@ for(t in 1:1){
 # Grow the disease 
 for(i in 1:nrow(hex_df)){
   if(hex_df[i,2] != 0){
-    hex_df[i,2] <- next_t_prev_FIXED_func(hex_df[i,2])
+    hex_df[i,2] <- logistic_reg_closed_func(hex_df[i,2])
   }
 }
 
@@ -528,6 +497,9 @@ print(combined_plot)
 
 ### Now set a soft boundary on 3 sides and a hard boundary on 1 side
 
+```{r}
+
+```
 
 
 ### Apply to Northeast landscape

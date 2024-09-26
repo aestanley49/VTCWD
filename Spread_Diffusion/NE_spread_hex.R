@@ -42,8 +42,20 @@ NE_single_polygon <- st_sf(geometry = NE_single_polygon)
 plot(st_make_grid(NEcounties, cellsize = .2, square = FALSE))
 plot(NEcounties, add = TRUE)
 
+# !!!!!!!!!*** Confused here !!!! 
+#https://github.com/r-spatial/sf/issues/1505
+# expected area = 10000m * 10000m = 1e+8 m2 = 100 km2
+cellarea <- 325 * (1e+6) # units are in m^2
+cellsizecalc <- 2 * sqrt(cellarea/((3*sqrt(3)/2))) * sqrt(3)/2
+hexa <- st_make_grid(x = NEcounties, cellsize = cellsize, square = FALSE)
+# Centroids of hexiods 20km apart
+# area = 325
+
+# yeah, super confused.... 
+# hex <- st_make_grid(NEcounties, cellsize = .2, square = FALSE)
 hex <- st_make_grid(NEcounties, cellsize = .2, square = FALSE)
-# Will need to change size later...
+
+
 
 # Convert hex grid to an sf object
 hex_sf <- st_sf(geometry = hex)

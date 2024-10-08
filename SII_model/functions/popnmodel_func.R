@@ -123,25 +123,42 @@ cwd_stoch_model <- function(params) {
   hunted <- popout
   
   # CWD matrix 
+  ### Need to set up a way to keep track of diseased individuals 
   
   
   ### Create starting population - copied from Paul Cross model. Is there a better way to do this???
+  # Create the Leslie Matrix to start the population at stable age dist
+  M <- matrix(rep(0, 5*5), nrow = 5) #fawn, juv f, adult f, juv m, adult m
+  
+  # replace the -1 off-diagonal with the survival rates
+  M[row(M) == (col(M) + 1)] <- c(juv.f.an.sur * (1 - hunt.mort.juv.f),
+                                 (ad.an.f.sur *  (1 - hunt.mort.ad.f)), 0,
+                                   (ad.an.m.sur * (1 - hunt.mort.ad.m)))
+  M[4,1] <-                     (juv.m.an.sur * (1 - hunt.mort.juv.m)) # don't have male and female fawns so this is wonky
+  # ****** Is this right??? 
+  
+  
+  # if you want the top age category to continue to survive
+  M[3, 3] <- ad.an.f.sur * (1 - hunt.mort.ad.f)
+  M[5, 5] <- ad.an.m.sur * (1 - hunt.mort.ad.m)
+  
+  # insert the fecundity vector prebirth census - fawns don't have sex so only doing this once
+  M[1, 1:3] <- c(0, juv.repro, ad.repro) * fawn.an.sur * (1 - hunt.mort.fawn)
+  
   # Initializing with the stable age distribution.
-  round(popbio::stable.stage(M)[1:3] * n0) # females: fawns, juv, adults
-
-  round(popbio::stable.stage(M)[(3 + 1):(3 * 2)] *n0) # males: fawns, juv, adults
-  #!!! Issue here - need a projection matrix 
+  suseptible <- round(popbio::stable.stage(M)[1:5] * n0) # fawns, juv f, adults f, juv m, adult m
   
+  popout[1,] <- c(suseptible, rep(0, 9))
   
-  ### Populate with starting values
-  # counts <- list(
-  #   fawn.S.N = fawn.S.N, juv.f.S.N = juv.f.S.N, juv.m.S.N = juv.m.S.N, ad.f.S.N = ad.f.S.N, ad.m.S.N = ad.m.S.N,
-  #   fawn.E.N = fawn.E.N, juv.f.E.N = juv.f.E.N, juv.m.E.N = juv.m.E.N, ad.f.E.N = ad.f.E.N, ad.m.E.N = ad.m.E.N,
-  #   juv.f.I.N = juv.f.I.N, juv.m.I.N = juv.m.I.N, ad.f.I.N = ad.f.I.N, ad.m.I.N = ad.m.I.N)
-  # 
-  popout[1,] <- unlist(counts)
   
   for(t in 2:nyears){
+    
+    #Pull out classes of individuals out of matrix and set as sex/age/disease state name
+    for (i in seq_along(colnames(popout))) {
+      col_names <- colnames(popout)
+      values <- popout[t-1,]
+      assign(col_names[i], values[i])
+    }
     
     ### Susceptible Category 
     # Fawns

@@ -22,11 +22,14 @@ library(spData)
 library(terra)
 library(raster)
 library(tidyverse)
+library(gganimate)
+library(gifski)
 
 ### To do - 
 # set up new sim
 ## D values set to 0 for vector of hex's with high prop covered by water bodies
 ## Some linear relationship between slope and D (decreases at higher values)
+## Also need to confirm what D value to use 
 
 
 ### Landscape
@@ -89,6 +92,10 @@ plot(st_geometry(hex_sf), col = 'lightblue', main = 'Intersection of Hex Grid an
 plot(st_geometry(NEcounties), add=TRUE, border = 'red')
 plot(st_geometry(NE_hex_grid), add = TRUE, col = 'green', border = 'black', lwd = 2)
 
+## Save empty hex grid 
+savehex <- NE_hex_grid %>% 
+  ggplot() + geom_sf()
+ggsave(".\\Spread_Diffusion\\outTWS\\hexgrid.png", width = 4, height = 4)
 
 ### ID each cell with number and empty prev 
 NE_hex_grid$value <- seq_along(NE_hex_grid$geometry)
@@ -171,14 +178,38 @@ NEfeatures_combined <- slope %>%
 NEfilteredwater <- NEfeatures_combined %>% 
   filter(propwater > .2)
 
+Dropcells_waterID <- NEfilteredwater$value
+
+## Normalize slope mean for each cell (this will be multiplied by D)
+# Setting largest to 0
+NEfeatures_combined <- NEfeatures_combined %>% 
+  mutate(scaled_slope = (MEAN - max(MEAN)) / (min(MEAN) - max(MEAN)))
 
 plot(NE_hex_grid$geometry)
-plot(st_geometry(NEfilteredwater), add = TRUE, col = 'lightblue', border = 'black', lwd = 2)
+plot(st_geometry(NEfilteredwater), add = TRUE, col = 'lightblue')
+
+## Save water data layer 
+savewater <- NE_hex_grid %>% 
+  ggplot() + geom_sf() + 
+  geom_sf(data = NEfilteredwater, aes(fill = propwater)) + 
+  guides(fill="none") + 
+  ggtitle("Cells with over 20% covered by water")
+
+ggsave(".\\Spread_Diffusion\\outTWS\\watercellsID.png", width = 4, height = 4)
 
 
 # Mean/Avg slope (in degrees) for each hexagon
 plot(NEfeatures_combined["MEAN"])
 
+## Save slope layer 
+saveslope <- NE_hex_grid %>% 
+  ggplot() + geom_sf() + 
+  geom_sf(data = NEfeatures_combined, aes(fill = MEAN, color = MEAN)) + 
+  scale_fill_continuous(name = "Mean % Slope") +
+  scale_color_continuous(name = "Mean % Slope")  
+#  ggtitle("Average Percent Slope")
+
+ggsave(".\\Spread_Diffusion\\outTWS\\Slopesave.png", width = 4, height = 4)
 
 
 ### Process water layer
@@ -347,14 +378,60 @@ VermontHexValues <- VTgrid$value
 ### ### Function for disease growth
 logistic_reg_closed_func <- function(Nt0, r = .2, K = .4){
   Nt1 <- Nt0 * (1 + (r * (1 - (Nt0/K))))
-  if(Nt1 > .4){
-    Nt1 <- .4 ## implement cap
-  }
+  # if(Nt1 > .4){
+  #   Nt1 <- .4 ## implement cap
+  # }
   return(Nt1)
 }
 
 
-### ### Define functions for hard vs soft boundaries (defined in "DiffusionModelMethods.Rmd")
+### ### Define functions for diffusion.
+
+### ## For regular diffusion 
+
+## amount of disease left in cell..
+post_diffusion_func <- function(cellno, mat_prev. = mat_prev, mymat. = mymat, D = .2){ # setting diffusion constant..
+  hold <- list()
+  adj <- (unlist(mymat.[cellno])) 
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != cellno]
+  for(j in adj){
+    ## Need to pull concentration out of this.. 
+    hold[j] <- mat_prev.[cellno,cellno] - mat_prev.[j,j]
+  }
+  outsum <- sum(unlist(hold)) 
+  # Can't have negative diffusion
+  if(outsum < 0){
+    outsum <- 0
+  }
+  return(outsum * (D/6))
+}
+
+### amount to allocate to selected cell
+amount_to_allocate_func2 <- function(cellno, mat_prev. = mat_prev, mymat. = mymat, D = .2){
+  adj <- (unlist(mymat.[cellno])) 
+  #setting diffusion constant..
+  hold <- list()
+  #remove the duplicate cell (if i = 1, remove "1")
+  adj <- adj[adj != cellno]
+  for(j in adj){
+    ## Need to pull concentration out of this.. 
+    hold[j] <- mat_prev.[cellno,cellno] - mat_prev.[j,j]
+  }
+  outsum <- sum(unlist(hold), na.rm = TRUE) # will generate NULLS & NAs but that's fine
+  # Can't have negative diffusion
+  if(outsum < 0){
+    outsum <- 0
+  }
+  post_diffusion_amount <- (outsum * (D/6))
+  diff <- mat_prev.[cellno,cellno] - post_diffusion_amount
+  if(post_diffusion_amount > mat_prev.[cellno,cellno]){ #guard against negative values
+    diff <- 0
+  }
+  return(diff/length(adj)) ## currently a hard boundary
+}
+
+### ## for hard vs soft boundaries (defined in "DiffusionModelMethods.Rmd")
 
 ### # Equilibrium (softboundaries)
 ### Amount to allocate to selected cell (soft)
@@ -554,6 +631,9 @@ trackboundarynos <- bordervec
 ### empty vector to hold VT time stamp
 VTtimestamp <- c()
 
+## Set D (coefficient of Diffusion) value
+Dvalue = 0.02
+
 ### ### ### Run over time loop 
 
 for(t in 1:50){
@@ -569,39 +649,55 @@ for(t in 1:50){
   diag(mat_prev_list[[t]]) <- NE_hex_df$prev 
   
   for(i in 1:nrow(mat_prev_list[[t]])){
-    if(!(i %in% hardborder_indices)){ # if the cell is not in the hard boundaires... 
-      
-      endprev <- post_diffusion_equilibrium_func(i, mat_prev_list[[t]], mymat_adj, D = .2)
+    
+    if(!(i %in% trackboundarynos)){ # if the cell is not a boundary cell, normal diffusion
+      endprev <- post_diffusion_func(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
       mat_prev_list[[t+1]][i,i] <- endprev # overwrite prevalence 
-      adj <- (unlist(mymat_adj[i])) 
+      adj <- (unlist(mymat_adj[i]))  
       #remove the duplicate cell (if i = 1, remove "1")
       adj <- adj[adj != i]
-      share_prev <- amount_to_allocate_equilibrium_func(i, mat_prev_list[[t]], mymat_adj, D = .2)
+      share_prev <- amount_to_allocate_func2(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
       for(n in adj){
         mat_prev_list[[t+1]][i,n] <- share_prev # write in added prevalence
-        
-        # if there are boundary cells neighboring target cell
-        # needs to give the same amount of prevalence back to cell neighboring boundary cells 
-        includesbounds <- intersect(trackboundarynos, n)
-        if(length(includesbounds) > 0){
-          mat_prev_list[[t+1]][n,i] <- share_prev
+      }
+      
+    } else{ ## Now do boundary cells.. 
+      
+      if(!(i %in% hardborder_indices)){ # if the cell is not in the hard boundaires... 
+        endprev <- post_diffusion_equilibrium_func(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
+        mat_prev_list[[t+1]][i,i] <- endprev # overwrite prevalence 
+        adj <- (unlist(mymat_adj[i])) 
+        #remove the duplicate cell (if i = 1, remove "1")
+        adj <- adj[adj != i]
+        share_prev <- amount_to_allocate_equilibrium_func(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
+        for(n in adj){
+          mat_prev_list[[t+1]][i,n] <- share_prev # write in added prevalence
+          
+          # if there are boundary cells neighboring target cell
+          # needs to give the same amount of prevalence back to cell neighboring boundary cells 
+          includesbounds <- intersect(trackboundarynos, n)
+          if(length(includesbounds) > 0){
+            mat_prev_list[[t+1]][n,i] <- share_prev
+          }
         }
-      }
-      
-      
-    } else {
-      endprev <- post_diffusion_hard_func(i, mat_prev_list[[t]], mymat_adj, D = .2)
-      mat_prev_list[[t+1]][i,i] <- endprev # overwrite prevalence 
-      adj <- (unlist(mymat_adj[i])) 
-      #remove the duplicate cell (if i = 1, remove "1")
-      adj <- adj[adj != i]
-      share_prev <- amount_to_allocate_hard_func(i, mat_prev_list[[t]], mymat_adj, D = .2)
-      for(n in adj){
-        mat_prev_list[[t+1]][i,n] <- share_prev # write in added prevalence
         
-      }
+        
+      } else {
+        endprev <- post_diffusion_hard_func(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
+        mat_prev_list[[t+1]][i,i] <- endprev # overwrite prevalence 
+        adj <- (unlist(mymat_adj[i])) 
+        #remove the duplicate cell (if i = 1, remove "1")
+        adj <- adj[adj != i]
+        share_prev <- amount_to_allocate_hard_func(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
+        for(n in adj){
+          mat_prev_list[[t+1]][i,n] <- share_prev # write in added prevalence
+          
+        }
+        
+      } # close else hard boundary 
       
-    } # close else hard boundary 
+    }
+    
   }
   
   ### then sum columns to get new prevalence 
@@ -624,13 +720,198 @@ for(t in 1:50){
 }
 
 
+## Pull data into one data frame to set up animation.. 
+
+# Combine data frames into one
+combined_df <- do.call(rbind, lapply(seq_along(og_landscape_list), function(i) {
+  df <- og_landscape_list[[i]]
+  df$year <- i  # Add the index as a new column
+  return(df)
+}))
+
+# Create the base ggplot object for animations
+base_plot <- ggplot() +
+  geom_sf(data = og_landscape_list[[50]], aes(fill = prev)) +
+  scale_fill_viridis_c(name = "Prevalence") +
+  theme_minimal()
+
+
+ggplot() +
+  geom_sf(data = combined_df %>% filter(year == 1), aes(fill = prev)) +
+  scale_fill_viridis_c(name = "Prevalence", limits = c(0, .4)) +
+  theme_minimal()
+
+# might want to set key to keep standard...
+
+## standard ggplot2
+myPlot <- ggplot() +
+  geom_sf(data = combined_df, aes(fill = prev)) +
+  scale_fill_viridis_c(name = "Prevalence", limits = c(0, .4)) +
+  theme_minimal() + 
+  # Here comes the gganimate specific bits
+  labs(title = 'Year: {frame_time}') +
+  transition_time(year) +
+  ease_aes('linear')
+
+
+# Okay so this works.. 
+animate(myPlot, renderer = gifski_renderer())
+
+Dvalue
+
+#animate(myPlot, duration = 5, fps = 20, width = 200, height = 200, renderer = gifski_renderer())
+anim_save("homogenousD_point2.gif")
+### note - haven't duplicated code to make D = .2 and D = .6 visuals, just changed value of D in functions
+
+
 ### Next steps
 # Prevalence is getting up to .8 because reset cap happens at beginning of time period
-  ## Has extra disease from diffusion of neighboring cells 
-  ## Can fix it for presentation purposes by resetting any outlies back to .4 
+## Has extra disease from diffusion of neighboring cells 
+## Can fix it for presentation purposes by resetting any outlies back to .4 
 # Check values used in model? 
 # Different D depending on: Water bodies? (lakes bigger than x?, topography steeper than y?)
 # Or random dispersal events to seed disease elsewhere? 
-# Then get linkage between this and the carcass disposal model 
 
 
+# objects to use ... 
+## Need to see why changing D doesn't do anything first, then can implement
+# Values change in methods doc,
+# check after first time step that also see different prev values here
+# might just be getting too satuated so not seeing much effect of different D
+Dropcells_waterID
+
+NEfeatures_combined$scaled_slope
+
+
+### ### ### Set up
+
+# NE_hex_grid2_starting_prev - this is right starting grid
+
+noyears <- 50 # no years 
+
+# Check for NA values
+if (any(is.na(NE_hex_grid$value))) {
+  stop("NA values detected in the value column.")
+}
+
+NE_hex_df <- as.data.frame(cbind(NE_hex_grid2_starting_prev$value, NE_hex_grid2_starting_prev$prev))
+names(NE_hex_df) <- c("value", "prev")
+
+### Replicate over as many time steps as needed
+og_landscape_list <- replicate(noyears, NE_hex_grid2_starting_prev, simplify = FALSE)
+
+## Need to get adjacency matrix...
+mymat_adj <- st_intersects(NE_hex_grid2_starting_prev, NE_hex_grid2_starting_prev)
+
+# Set up matrix to record diffusion 
+mat_prev <- matrix(NA, nrow(NE_hex_grid2_starting_prev), nrow(NE_hex_grid2_starting_prev))
+
+mat_prev_list <- replicate((noyears + 1), mat_prev, simplify = FALSE)
+
+### ID cells that are boundary cells and list 
+trackboundarynos <- bordervec
+
+### empty vector to hold VT time stamp
+VTtimestamp <- c()
+
+## Set D (coefficient of Diffusion) value
+Dvalue = 0.002
+
+### ### ### Run over time loop 
+
+for(t in 1:50){
+  
+  # Grow the disease 
+  for(i in 1:nrow(NE_hex_df)){
+    if(NE_hex_df[i,2] != 0){
+      NE_hex_df[i,2] <- logistic_reg_closed_func(NE_hex_df[i,2])
+    }
+  }
+  
+  # set mat prev as diagonal
+  diag(mat_prev_list[[t]]) <- NE_hex_df$prev 
+  
+  for(i in 1:nrow(mat_prev_list[[t]])){
+    
+    if(!(i %in% trackboundarynos)){ # if the cell is not a boundary cell, normal diffusion
+      endprev <- post_diffusion_func(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
+      mat_prev_list[[t+1]][i,i] <- endprev # overwrite prevalence 
+      adj <- (unlist(mymat_adj[i]))  
+      #remove the duplicate cell (if i = 1, remove "1")
+      adj <- adj[adj != i]
+      share_prev <- amount_to_allocate_func2(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
+      for(n in adj){
+        mat_prev_list[[t+1]][i,n] <- share_prev # write in added prevalence
+      }
+      
+    } else{ ## Now do boundary cells.. 
+      
+      if(!(i %in% hardborder_indices)){ # if the cell is not in the hard boundaires... 
+        endprev <- post_diffusion_equilibrium_func(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
+        mat_prev_list[[t+1]][i,i] <- endprev # overwrite prevalence 
+        adj <- (unlist(mymat_adj[i])) 
+        #remove the duplicate cell (if i = 1, remove "1")
+        adj <- adj[adj != i]
+        share_prev <- amount_to_allocate_equilibrium_func(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
+        for(n in adj){
+          mat_prev_list[[t+1]][i,n] <- share_prev # write in added prevalence
+          
+          # if there are boundary cells neighboring target cell
+          # needs to give the same amount of prevalence back to cell neighboring boundary cells 
+          includesbounds <- intersect(trackboundarynos, n)
+          if(length(includesbounds) > 0){
+            mat_prev_list[[t+1]][n,i] <- share_prev
+          }
+        }
+        
+        
+      } else {
+        endprev <- post_diffusion_hard_func(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
+        mat_prev_list[[t+1]][i,i] <- endprev # overwrite prevalence 
+        adj <- (unlist(mymat_adj[i])) 
+        #remove the duplicate cell (if i = 1, remove "1")
+        adj <- adj[adj != i]
+        share_prev <- amount_to_allocate_hard_func(i, mat_prev_list[[t]], mymat_adj, D = Dvalue)
+        for(n in adj){
+          mat_prev_list[[t+1]][i,n] <- share_prev # write in added prevalence
+          
+        }
+        
+      } # close else hard boundary 
+      
+    }
+
+  }
+  
+  ### then sum columns to get new prevalence 
+  newprevvales <- colSums(mat_prev_list[[t+1]], na.rm = TRUE)
+  
+  ### Check to see if the disease is at a detectable level in VT yet
+  levelsinVT <- newprevvales[c(VermontHexValues)]
+  for(i in levelsinVT){
+    if(i > .05){ #if a cell has a value greater than 5%
+      if (length(VTtimestamp) == 0){ #only want the first time period it's detected
+        VTtimestamp <- t # with current parameters, it's not in VT yet
+      }
+    }
+  }
+  
+  # For flat earth, would need to change code inside if else statement and add line here setting back to 0
+  
+  og_landscape_list[[t]]$prev <- NE_hex_df$prev <- newprevvales
+  
+}
+
+
+
+
+
+
+ggplot() +
+  geom_sf(data = og_landscape_list[[50]], aes(fill = prev)) +
+  scale_fill_viridis_c(name = "Prevalence") +
+  theme_minimal()
+
+### Checking get different values of prev for different D.. true but they are very similar..
+#point2 <- NE_hex_df
+#point4 <- NE_hex_df

@@ -26,13 +26,9 @@ source("../SII_model/functions/popnmodel_func.R")
 Set parameters
 ```{r}
 params <- list(
-  fawn.S.N = 100, juv.f.S.N = 50, juv.m.S.N = 50, ad.f.S.N = 80, ad.m.S.N = 20,
-  fawn.E.N = 0, juv.f.E.N = 0, juv.m.E.N = 0, ad.f.E.N = 0, ad.m.E.N = 0,
-  juv.f.I.N = 0, juv.m.I.N = 0, ad.f.I.N = 0, ad.m.I.N = 0,
+  fawn.an.sur = 0.8, juv.f.an.sur = 0.95, juv.m.an.sur = .8, ad.an.f.sur = 0.99, ad.an.m.sur = 0.9, 
   
-  fawn.an.sur = 0.7, juv.f.an.sur = 0.9, juv.m.an.sur = .7, ad.an.f.sur = 0.95, ad.an.m.sur = 0.8, 
-  
-  juv.repro = 0.4, ad.repro = .9,
+  juv.repro = 0.5, ad.repro = .9,
   
   hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.2, hunt.mort.ad.f = 0.15, hunt.mort.ad.m = 0.35, 
   
@@ -68,7 +64,7 @@ dat.sum <- counts_overtime %>%
 
 ggplot(data = dat.sum, aes(x = year, y = n)) +
   geom_line() +  
- # geom_hline(yintercept = 143758, color = "red") +
+  geom_hline(yintercept = 143758, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Total Abundance", 
        x = "Year", 
@@ -83,7 +79,7 @@ dat.sum.bucks <- counts_overtime %>%
 
 ggplot(data = dat.sum.bucks, aes(x = year, y = n)) +
   geom_line() +  
- # geom_hline(yintercept = 143758, color = "red") +
+  geom_hline(yintercept = 27729, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Buck Abundance", 
        x = "Year", 
@@ -98,7 +94,7 @@ dat.sum.doe <- counts_overtime %>%
 
 ggplot(data = dat.sum.doe, aes(x = year, y = n)) +
   geom_line() +  
- # geom_hline(yintercept = 143758, color = "red") +
+  geom_hline(yintercept = 70710, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Doe Abundance", 
        x = "Year", 
@@ -114,7 +110,7 @@ dat.sum.fawn <- counts_overtime %>%
 
 ggplot(data = dat.sum.fawn, aes(x = year, y = n)) +
   geom_line() +  
- # geom_hline(yintercept = 143758, color = "red") +
+  geom_hline(yintercept = 143758, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Fawn Abundance", 
        x = "Year", 
@@ -132,9 +128,8 @@ doe_fawn_ratio <- counts_overtime %>%
 
 ggplot(data = doe_fawn_ratio, aes(x = year, y = doe_fawn)) +
   geom_line() +  
- # geom_hline(yintercept = 143758, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
- # geom_hline(yintercept = 1.5, color = "red") + ## This will depend on pop starting size and starting month
+  geom_hline(yintercept = 1.5, color = "red") + ## This will depend on pop starting size and starting month
   labs(title = "Doe:Fawn Ratio", 
        x = "Year", 
        y = "Total Count")
@@ -169,6 +164,8 @@ harv.sum.bucks <- harvest_overtime %>%
 ggplot(data = harv.sum.bucks, aes(x = year, y = n)) +
   geom_line() +  
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
+  geom_hline(yintercept = 9600, color = "red") + ## This will depend on pop starting size
+  geom_hline(yintercept = 9600 * .1 + 9600, color = "midnightblue") + ## 10% wounding loss + harvest
   labs(title = "Buck Harvest", 
        x = "Year", 
        y = "Total Count") 
@@ -182,7 +179,8 @@ harv.sum.doe <- harvest_overtime %>%
 
 ggplot(data = harv.sum.doe, aes(x = year, y = n)) +
   geom_line() +  
- # geom_hline(yintercept = 143758, color = "red") +
+  geom_hline(yintercept = 6000, color = "red") + ## This will depend on pop starting size
+  geom_hline(yintercept = 6000 * .1 + 6000, color = "midnightblue") + ## 10% wounding loss + harvest
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Doe Harvest", 
        x = "Year", 
@@ -199,7 +197,8 @@ harv.sum.juv <- harvest_overtime %>%
 
 ggplot(data = harv.sum.juv, aes(x = year, y = n)) +
   geom_line() +  
- # geom_hline(yintercept = 143758, color = "red") +
+  geom_hline(yintercept = 3680, color = "red") + ## This will depend on pop starting size
+  geom_hline(yintercept = 3680 * .1 + 3680, color = "midnightblue") + ## 10% wounding loss + harvest
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Juveniles Harvest", 
        x = "Year", 
@@ -214,7 +213,7 @@ harv.sum.fawn <- harvest_overtime %>%
 
 ggplot(data = harv.sum.fawn, aes(x = year, y = n)) +
   geom_line() +  
- # geom_hline(yintercept = 143758, color = "red") +
+  geom_hline(yintercept = 550, color = "red") + ## This will depend on pop starting size
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Fawn Harvest", 
        x = "Year", 

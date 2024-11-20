@@ -16,12 +16,14 @@ output: html_document
 - Survival [adult, juvenile, fawn]
 
 Load libraries and files 
-```{r}
+```{r, warning=FALSE}
 rm(list=ls())
 library(tidyverse)
 library(here)
 
-source("../SII_model/functions/popnmodel_func_JC.R")
+source("../SII_model/functions/CreateStableAgeStructure_func.R")
+source("../SII_model/functions/popnmodel_func.R")
+
 ```
 
 Set parameters
@@ -29,13 +31,17 @@ Set parameters
 params <- list(
   fawn.an.sur = 0.7, fawn.an.sur.var= 0.005, juv.f.an.sur = 0.8, juv.f.an.sur.var=0.005, juv.m.an.sur = .8, juv.m.an.sur.var=0.005, ad.an.f.sur = 0.82, ad.an.f.sur.var=0.005, ad.an.m.sur = 0.8, ad.an.m.sur.var=0.005,
   
-  juv.repro = 1.3, ad.repro = 1.4,
+  juv.repro = 1.3, ad.repro = 1.4,   repro.var = 0.005,
   
-  hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.1, hunt.mort.ad.f = 0.2, hunt.mort.ad.m = 0.5, 
+  hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.1, hunt.mort.ad.f = 0.2, hunt.mort.ad.m = 0.5, hunt.var = 0.005,
   
-  e.fawn.rate = 0.0, e.ja.rate = 0.0, i.fawn.rate = 0.0, i.ja.rate = 0.0,
+  # temp set these to 0 for calibration
+  R0 = 1.25, # Couldn't easily find anything in lit. This should make it spread
+  i.rate = 0,
+  env = 0, shedrate = 0, expdecayconstant = 0,
   
-  env = 0, shedrate = .5, expdecayconstant = .55,
+  # e.rate = 0.5, i.rate = 0.5,
+  # env = 0, shedrate = .5, expdecayconstant = .55,
   
   nyears = 20, n0 = 143000
   )
@@ -123,12 +129,19 @@ dat.sum.fawn <- counts_overtime %>%
 
 ggplot(data = dat.sum.fawn, aes(x = year, y = n)) +
   geom_line() +  
-  geom_hline(yintercept = 143758, color = "red") +
+  geom_hline(yintercept = 43127, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Fawn Abundance", 
        x = "Year", 
        y = "Total Count") 
 ```
+
+#### Back calculate age proportion 
+```{r}
+
+```
+
+
 
 #### Doe:Fawn ratio 
 ```{r}
@@ -153,7 +166,7 @@ ggplot(data = doe_fawn_ratio, aes(x = year, y = doe_fawn)) +
 
 #### Harvest [buck, doe, juv, fawn]
 
-* just a note that if we are going to add complexity to the model, I don't know that the harvest df is set up correctly in the model (would be subject to stochasticity... currently calculated based on a flat rate)
+* just a note that if we are going to add complexity to the model, I don't know that the harvest df is set up correctly in the model (would be subject to stochasticity ... currently calculated based on a flat rate)
 
 ```{r Harvest for all}
 harv.sum <- harvest_overtime %>%

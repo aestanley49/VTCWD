@@ -1,7 +1,7 @@
 ---
 title: "Calibrate SII Model"
 author: "Annabelle"
-date: "2024-10-02"
+date: "2024-11-20"
 output: html_document
 ---
 
@@ -20,11 +20,17 @@ Load libraries and files
 rm(list=ls())
 library(tidyverse)
 library(here)
+library(reshape2)
 
 source("../SII_model/functions/CreateStableAgeStructure_func.R")
 source("../SII_model/functions/popnmodel_func.R")
+source("../SII_model/functions/sims_wrapper_func.R")
 
 ```
+
+!!! Pick up here - should be able to keep same code structure just sims specific.. 
+- then need to see how did surveillance and actions in old model 
+- Should probably update overleaf/latex doc
 
 Set parameters
 ```{r}
@@ -51,18 +57,18 @@ params <- list(
 
 
 ```{r}
-popfit <- cwd_stoch_model(params)
+popfit <- sims_wrapper(params,  50)
 
 counts_overtime <- as.data.frame(popfit$counts)
 
-harvest_overtime <- as.data.frame(popfit$removed)
+harvest_overtime <- as.data.frame(popfit$harvest)
 
 dat.sum <- counts_overtime %>%
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
+  group_by(sim, year) %>% 
+  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
 
 ggplot(data = dat.sum, aes(x = year, y = n)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +  
   geom_hline(yintercept = 143758, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Total Abundance", 
@@ -70,34 +76,16 @@ ggplot(data = dat.sum, aes(x = year, y = n)) +
        y = "Total Count") 
 ```
 
-notes, these are fractional amounts. need to switch to whole numbers?
 
-
-
-#### Abundance [all, bucks, does, fawns]
-- Not including juveniles in buck/doe abundance?? 
-```{r Abundance for all}
-dat.sum <- counts_overtime %>%
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
-
-ggplot(data = dat.sum, aes(x = year, y = n)) +
-  geom_line() +  
-  geom_hline(yintercept = 143758, color = "red") +
-  theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
-  labs(title = "Total Abundance", 
-       x = "Year", 
-       y = "Total Count") 
-```
 
 ```{r Abundance for all bucks}
 dat.sum.bucks <- counts_overtime %>%
+  group_by(sim, year) %>% 
   select(matches("ad.m", ignore.case = TRUE)) %>% 
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
+  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
 
 ggplot(data = dat.sum.bucks, aes(x = year, y = n)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) + 
   geom_hline(yintercept = 27729, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Buck Abundance", 
@@ -107,12 +95,12 @@ ggplot(data = dat.sum.bucks, aes(x = year, y = n)) +
 
 ```{r Abundance for all does}
 dat.sum.doe <- counts_overtime %>%
+  group_by(sim, year) %>% 
   select(matches("ad.f", ignore.case = TRUE)) %>% 
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
+  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
 
 ggplot(data = dat.sum.doe, aes(x = year, y = n)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) + 
   geom_hline(yintercept = 70710, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Doe Abundance", 
@@ -123,12 +111,12 @@ ggplot(data = dat.sum.doe, aes(x = year, y = n)) +
 
 ```{r Abundance for all fawns}
 dat.sum.fawn <- counts_overtime %>%
+  group_by(sim, year) %>% 
   select(matches("fawn", ignore.case = TRUE)) %>% 
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
+  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
 
 ggplot(data = dat.sum.fawn, aes(x = year, y = n)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) + 
   geom_hline(yintercept = 43127, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Fawn Abundance", 
@@ -142,17 +130,17 @@ dat.sum.prop  <- counts_overtime %>%
   mutate(fawn_sum = rowSums(select(., matches("fawn", ignore.case = TRUE)), na.rm = TRUE)) %>%
   mutate(female_sum = rowSums(select(., matches("\\.f\\.", ignore.case = TRUE)), na.rm = TRUE)) %>%
   mutate(male_sum = rowSums(select(., matches("\\.m\\.", ignore.case = TRUE)), na.rm = TRUE)) %>%
+  group_by(sim, year) %>% 
   mutate(total_pop = fawn_sum + female_sum+ male_sum) %>% 
   mutate(fawn_prop = fawn_sum/total_pop) %>% 
   mutate(female_prop = female_sum/total_pop) %>% 
-  mutate(male_prop = male_sum/total_pop) %>% 
-  mutate(year = row_number())
+  mutate(male_prop = male_sum/total_pop) 
 
 
 ggplot(data = dat.sum.prop) +
-  geom_line(aes(x = year, y = fawn_prop), color = "red") +  
-  geom_line(aes(x = year, y = female_prop), color = "blue") +  
-  geom_line(aes(x = year, y = male_prop), color = "green") +  
+  geom_line(aes(x = year, y = fawn_prop, group = sim), color = "red") +  
+  geom_line(aes(x = year, y = female_prop, group = sim), color = "blue") +  
+  geom_line(aes(x = year, y = male_prop, group = sim), color = "green") +  
   #geom_hline(yintercept = 43127, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Proportional Abundance", 
@@ -165,14 +153,14 @@ ggplot(data = dat.sum.prop) +
 #### Doe:Fawn ratio 
 ```{r}
 doe_fawn_ratio <- counts_overtime %>%
+  group_by(sim, year) %>% 
   select(matches("ad.f", ignore.case = TRUE), matches("fawn", ignore.case = TRUE)) %>% 
   dplyr::mutate(n_doe = rowSums(across(matches("ad.f", ignore.case = TRUE)), na.rm = TRUE))%>%
     dplyr::mutate(n_fawn = rowSums(across(matches("fawn", ignore.case = TRUE)), na.rm = TRUE))%>%
-  dplyr::mutate(doe_fawn = n_doe/n_fawn)%>%
-  mutate(year = row_number())
+  dplyr::mutate(doe_fawn = n_doe/n_fawn)
 
 ggplot(data = doe_fawn_ratio, aes(x = year, y = doe_fawn)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   geom_hline(yintercept = 1.5, color = "red") + ## This will depend on pop starting size and starting month
   labs(title = "Doe:Fawn Ratio", 
@@ -189,11 +177,11 @@ ggplot(data = doe_fawn_ratio, aes(x = year, y = doe_fawn)) +
 
 ```{r Harvest for all}
 harv.sum <- harvest_overtime %>%
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
+  group_by(sim, year) %>% 
+  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
 
 ggplot(data = harv.sum, aes(x = year, y = n)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Total Harvest", 
        x = "Year", 
@@ -202,12 +190,12 @@ ggplot(data = harv.sum, aes(x = year, y = n)) +
 
 ```{r Harvest for all bucks}
 harv.sum.bucks <- harvest_overtime %>%
+  group_by(sim, year) %>% 
   select(matches("ad.m", ignore.case = TRUE)) %>% 
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
+  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
 
 ggplot(data = harv.sum.bucks, aes(x = year, y = n)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   geom_hline(yintercept = 9600, color = "red") + ## This will depend on pop starting size
   geom_hline(yintercept = 9600 * .1 + 9600, color = "midnightblue") + ## 10% wounding loss + harvest
@@ -217,13 +205,13 @@ ggplot(data = harv.sum.bucks, aes(x = year, y = n)) +
 ```
 
 ```{r Harvest for all does}
-harv.sum.doe <- harvest_overtime %>%
+harv.sum.doe <- harvest_overtime %>% 
+  group_by(sim, year) %>% 
   select(matches("ad.f", ignore.case = TRUE)) %>% 
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
+  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
 
 ggplot(data = harv.sum.doe, aes(x = year, y = n)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) + 
   geom_hline(yintercept = 6000, color = "red") + ## This will depend on pop starting size
   geom_hline(yintercept = 6000 * .1 + 6000, color = "midnightblue") + ## 10% wounding loss + harvest
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
@@ -236,12 +224,12 @@ juveniles
 
 ```{r Harvest for all juveniles}
 harv.sum.juv <- harvest_overtime %>%
+  group_by(sim, year) %>% 
   select(matches("juv", ignore.case = TRUE)) %>% 
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
+  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
 
 ggplot(data = harv.sum.juv, aes(x = year, y = n)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) + 
   geom_hline(yintercept = 3680, color = "red") + ## This will depend on pop starting size
   geom_hline(yintercept = 3680 * .1 + 3680, color = "midnightblue") + ## 10% wounding loss + harvest
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
@@ -252,12 +240,12 @@ ggplot(data = harv.sum.juv, aes(x = year, y = n)) +
 
 ```{r Harvest for all fawns}
 harv.sum.fawn <- harvest_overtime %>%
+  group_by(sim,year) %>% 
   select(matches("fawn", ignore.case = TRUE)) %>% 
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
+  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
 
 ggplot(data = harv.sum.fawn, aes(x = year, y = n)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +   
   geom_hline(yintercept = 550, color = "red") + ## This will depend on pop starting size
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Fawn Harvest", 
@@ -270,14 +258,14 @@ ggplot(data = harv.sum.fawn, aes(x = year, y = n)) +
 
 ```{r Survival bucks}
 dat.sum.bucks <- counts_overtime %>%
+  group_by(sim, year) %>% 
   select(matches("ad.m", ignore.case = TRUE)) %>% 
-  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))%>%
-  mutate(year = row_number())
+  dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
 
 harv.sum.bucks
 
 ggplot(data = dat.sum.bucks, aes(x = year, y = n)) +
-  geom_line() +  
+  geom_line(aes(group = sim), color = "grey", size = 0.5) +   
  # geom_hline(yintercept = 143758, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Buck Abundance", 
@@ -297,24 +285,21 @@ dat.disease.prop  <- counts_overtime %>%
   mutate(suseptible_sum = rowSums(select(., matches("\\.S\\.", ignore.case = TRUE)), na.rm = TRUE)) %>%
   mutate(exposed_sum = rowSums(select(., matches("\\.E\\.", ignore.case = TRUE)), na.rm = TRUE)) %>%
   mutate(infected_sum = rowSums(select(., matches("\\.I\\.", ignore.case = TRUE)), na.rm = TRUE)) %>%
+      group_by(sim, year) %>% 
   mutate(total_pop = suseptible_sum + exposed_sum+ infected_sum) %>% 
   mutate(suseptible_prop = suseptible_sum/total_pop) %>% 
   mutate(exposed_prop = exposed_sum/total_pop) %>% 
-  mutate(infected_prop = infected_sum/total_pop) %>% 
-  mutate(year = row_number())
+  mutate(infected_prop = infected_sum/total_pop) 
 
 
 ggplot(data = dat.disease.prop) +
-  geom_line(aes(x = year, y = suseptible_prop), color = "red") +  
-  geom_line(aes(x = year, y = exposed_prop), color = "blue") +  
-  geom_line(aes(x = year, y = infected_prop), color = "green") +  
+  geom_line(aes(x = year, y = suseptible_prop, group = sim), color = "red") +  
+  geom_line(aes(x = year, y = exposed_prop, group = sim), color = "blue") +  
+  geom_line(aes(x = year, y = infected_prop, group = sim), color = "green") +  
   #geom_hline(yintercept = 43127, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Proportional Abundance", 
        x = "Year", 
        y = "Proportion") 
 ```
-
-
-
 

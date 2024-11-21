@@ -18,7 +18,17 @@ returnstartingpopn <- function(params){
                 (0.5*(fawn.an.sur ^ (5/12)*(1 - hunt.mort.fawn))),  0,       0,       0,     0,
                 0,       0,       0,       (juv.m.an.sur ^ (5/12) * (1 - hunt.mort.juv.m)),   (ad.an.m.sur ^ (5/12) * (1 - hunt.mort.ad.m))),
               nrow=5,ncol=5,byrow = T)
-  prop4<-popbio::stable.stage(M4) 
+
+  prop4<-popbio::stable.stage(M4)
+  
+  # M<-matrix(c(0,  (juv.f.an.sur ^ (5/12) * juv.repro * juv.off), (ad.an.f.sur ^ (5/12) * ad.repro * ad.off),     0,     0,
+  #             (0.5*(fawn.an.sur ^ (5/12) *(1 - hunt.mort.fawn))),  0,       0,       0,     0,
+  #             0, (juv.f.an.sur ^ (5/12) * (1 - hunt.mort.juv.f)), (ad.an.f.sur ^ (5/12) * (1 - hunt.mort.ad.f)),     0,     0,
+  #             (0.5*(fawn.an.sur ^ (5/12) *(1 - hunt.mort.fawn))),  0,       0,       0,     0,
+  #             0,       0,       0,       (juv.m.an.sur ^ (5/12) * (1 - hunt.mort.juv.m)),   (ad.an.m.sur ^ (5/12) * (1 - hunt.mort.ad.m))),
+  #           nrow=5,ncol=5,byrow = T)
+  # 
+  # prop4<-popbio::stable.stage(M) 
   
   ## Nick's estimate - fawns = 30%, does = 50%, bucks = 20% 
   startingpopn <- prop4 * n0

@@ -28,18 +28,17 @@ source("../SII_model/functions/sims_wrapper_func.R")
 
 ```
 
-!!! Pick up here - should be able to keep same code structure just sims specific.. 
 - then need to see how did surveillance and actions in old model 
 - Should probably update overleaf/latex doc
 
 Set parameters
 ```{r}
 params <- list(
-  fawn.an.sur = 0.7, fawn.an.sur.var= 0.005, juv.f.an.sur = 0.8, juv.f.an.sur.var=0.005, juv.m.an.sur = .8, juv.m.an.sur.var=0.005, ad.an.f.sur = 0.82, ad.an.f.sur.var=0.005, ad.an.m.sur = 0.8, ad.an.m.sur.var=0.005,
+  fawn.an.sur = 0.7, fawn.an.sur.var= 0.005, juv.f.an.sur = 0.9, juv.f.an.sur.var=0.005, juv.m.an.sur = .8, juv.m.an.sur.var=0.005, ad.an.f.sur = 0.95, ad.an.f.sur.var=0.005, ad.an.m.sur = 0.8, ad.an.m.sur.var=0.005,
   
   juv.repro = 1.3, ad.repro = 1.4,   repro.var = 0.005,
   
-  hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.1, hunt.mort.ad.f = 0.2, hunt.mort.ad.m = 0.5, hunt.var = 0.005,
+  hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.1, hunt.mort.ad.f = 0.15, hunt.mort.ad.m = 0.35, hunt.var = 0.005,
   
   # temp set these to 0 for calibration
   R0 = 1.25, # Couldn't easily find anything in lit. This should make it spread

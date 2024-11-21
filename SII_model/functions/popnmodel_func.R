@@ -101,8 +101,6 @@ est_beta_params <- function(mu, var) {
   return(params = list(alpha = alpha, beta = beta))
 }
 
-# source("../VTCWD/SII_model/functions/CreateStableAgeStructure_func.R")
-
 
 cwd_stoch_model <- function(params) {
 

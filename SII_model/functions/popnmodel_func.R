@@ -1,5 +1,5 @@
 
-# Ref - https://clas.ucdenver.edu/marcelo-perraillon/sites/default/files/attached-files/lecture_12_inf_model.pdf
+#' Ref - https://clas.ucdenver.edu/marcelo-perraillon/sites/default/files/attached-files/lecture_12_inf_model.pdf
 
 ## Suseptible
 #' fawn.S.N = Fawn Suseptible count (scaler value >= 0),
@@ -101,15 +101,17 @@ est_beta_params <- function(mu, var) {
   return(params = list(alpha = alpha, beta = beta))
 }
 
-source("../VTCWD/SII_model/functions/CreateStableAgeStructure_func.R")
+# source("../VTCWD/SII_model/functions/CreateStableAgeStructure_func.R")
 
 
 cwd_stoch_model <- function(params) {
-  
+
   
   # Extract params
   # write the list objects to the local environment
-  for (v in 1:length(params)) assign(names(params)[v], params[[v]])
+  for (v in 1:length(params)){
+    assign(names(params)[v], params[[v]]) 
+  }
   
   ### Create list to hold output for each year
   popout <- matrix(0, nrow = nyears, ncol = 14)
@@ -124,7 +126,7 @@ cwd_stoch_model <- function(params) {
   # CWD matrix 
   ### Need to set up a way to keep track of diseased individuals 
   
-  stablestate <- returnstartingpopn() # this is ordered fawns, juv f, adults f, juv m, adult m
+  stablestate <- returnstartingpopn(params) # this is ordered fawns, juv f, adults f, juv m, adult m
   
   popout[1,] <- c(stablestate[1:2], stablestate[4], stablestate[3], stablestate[5], rep(0, 9))
   hunted[1,] <- c(popout[1,1] * hunt.mort.fawn, popout[1,2] * hunt.mort.juv.f, popout[1,3] * hunt.mort.juv.m, popout[1,4] * hunt.mort.ad.f, popout[1,5] * hunt.mort.ad.m, rep(0, 9))
@@ -175,8 +177,11 @@ cwd_stoch_model <- function(params) {
     # transmission rate (or the rate of contact) beta and the probability of infection given that contact occurred
 
     e.rate <- (sum(popout[t,-c(1:5)])/sum(popout[t,])) *R0
+    if(is.na(e.rate)){
+      e.rate <- 0 
+    }
     
-    envres[t,] <- envres[t-1,] + (popout[t,c(11:14)]*shedrate) - (envres[t-1,] * expdecayconstant)
+    envres[t,] <- envres[t-1,] + sum(popout[t,c(11:14)]*shedrate) - (envres[t-1,] * expdecayconstant)
     
     ## envres needs to feed into indirect transmission
     # additive in beta? 

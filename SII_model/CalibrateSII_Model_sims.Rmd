@@ -25,6 +25,7 @@ library(reshape2)
 source("../SII_model/functions/CreateStableAgeStructure_func.R")
 source("../SII_model/functions/popnmodel_func.R")
 source("../SII_model/functions/sims_wrapper_func.R")
+source("../SII_model/functions/randomsampling_func.R")
 
 ```
 
@@ -32,36 +33,127 @@ source("../SII_model/functions/sims_wrapper_func.R")
 - Should probably update overleaf/latex doc
 
 Set parameters
+- Note - can't set repro higher than 1.9 because pulling from a beta distribution (currently using a hack where we divide by 2). Do we want to switch to a gamma? 
 ```{r}
 params <- list(
-  fawn.an.sur = 0.7, fawn.an.sur.var= 0.005, juv.f.an.sur = 0.9, juv.f.an.sur.var=0.005, juv.m.an.sur = .8, juv.m.an.sur.var=0.005, ad.an.f.sur = 0.95, ad.an.f.sur.var=0.005, ad.an.m.sur = 0.8, ad.an.m.sur.var=0.005,
+  fawn.an.sur = 0.7, fawn.an.sur.var= 0.005, juv.f.an.sur = 0.8, juv.f.an.sur.var=0.005, juv.m.an.sur = .8, juv.m.an.sur.var=0.005, ad.an.f.sur = 0.87, ad.an.f.sur.var=0.005, ad.an.m.sur = 0.75, ad.an.m.sur.var=0.005,
   
-  juv.repro = 1.3, ad.repro = 1.4,   repro.var = 0.005,
+  juv.repro = 2.6, ad.repro = 2.8,   repro.var = 0.005,
   
-  hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.1, hunt.mort.ad.f = 0.15, hunt.mort.ad.m = 0.35, hunt.var = 0.005,
+  hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.1, hunt.mort.ad.f = 0.2, hunt.mort.ad.m = 0.45, hunt.var = 0.005,
+  
+  # turn stochasticity of vital rates on and off.. 
+    switch_stoch_survival_rates = 1, # (on = 1)
+    switch_stoch_hunt_rates = 1, # (on = 1)
+    switch_stoch_repro_rates = 1, # (on = 1)
   
   # temp set these to 0 for calibration
-  R0 = 1.25, # Couldn't easily find anything in lit. This should make it spread
-  i.rate = 0,
-  env = 0, shedrate = 0, expdecayconstant = 0,
+  switchdiseasedy_on = 0, # turn disease dynamics on or off (on = 1)
+  arrival_input = c(100,100,1,1,1,1,5, 1, 8, 14), # currently set for 10 years 
   
-  # e.rate = 0.5, i.rate = 0.5,
-  # env = 0, shedrate = .5, expdecayconstant = .55,
+  i.rate = .5,
+  env = 0, shedrate_I = .5, shedrate_H = .5, shedrate_ND = .5, expdecayconstant = .55, beta = .4,
   
-  nyears = 20, n0 = 143000
+  #model 1
+  model1 = 1, # this selects set up for Vasilyeva et al. paper
+   ke = .1, lambda = .1, Pe = .1, sigma = .1,
+  #model 2?
+  ## ???
+  
+  nyears = 200, n0 = 143000, K = 250000,
+  
+  ### Action parameters
+  nosampled = 5,
+  
+  
+  ### Farm Years - comodel 
+  alpha = .01, beta1 = .3, beta2 = .3, beta3 = .3
   )
 ```
 
 
 
 
+
 ```{r}
-popfit <- sims_wrapper(params,  50)
+popfit <- sims_wrapper(params,  1)
 
 counts_overtime <- as.data.frame(popfit$counts)
 
 harvest_overtime <- as.data.frame(popfit$harvest)
+```
 
+
+
+#### Check vital rates
+
+
+survival 
+```{r}
+vitals_sims_sur <- as.data.frame(popfit$vitalscheck[c(-1),c(1:5,9,10)])
+names(vitals_sims_sur) <- c("fawn.sur", "juv.f.sur", "juv.m.sur", "ad.f.sur", "ad.m.sur",
+                        "year", "sim")
+
+ggplot(vitals_sims_sur) +
+  geom_line(aes(x = year, y = fawn.sur, group = sim), color = "blue", size = 0.5) +  
+    geom_line(aes(x = year, y = juv.f.sur, group = sim), color = "red", size = 0.5) +  
+    geom_line(aes(x = year, y = juv.m.sur, group = sim), color = "green", size = 0.5) +  
+    geom_line(aes(x = year, y = ad.f.sur, group = sim), color = "black", size = 0.5) +  
+    geom_line(aes(x = year, y = ad.m.sur, group = sim), color = "grey", size = 0.5) +  
+  # geom_hline(yintercept = 143758, color = "red") +
+  theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
+  labs(title = "Survival by age category", 
+       x = "Year", 
+       y = "Survival") 
+
+
+```
+
+
+reproduction rate 
+```{r}
+vitals_sims <- as.data.frame(popfit$vitalscheck[c(-1),c(6:7,9,10)])
+names(vitals_sims) <- c("juv.repro", "ad.repro",
+                        "year", "sim")
+
+ggplot(vitals_sims) +
+  geom_line(aes(x = year, y = juv.repro, group = sim), color = "blue", size = 0.5) +  
+    geom_line(aes(x = year, y = ad.repro, group = sim), color = "green", size = 0.5) +  
+  # geom_hline(yintercept = 143758, color = "red") +
+  theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
+  labs(title = "Reproduction rate by age category", 
+       x = "Year", 
+       y = "reproduction") 
+```
+
+check autocorrelation on ad.repro.draw
+https://www.r-bloggers.com/2024/07/calculating-autocorrelation-in-r/
+"A high autocorrelation at lag 0 indicates that a variable is highly correlated with itself."
+```{r}
+acf(vitals_sims$ad.repro[1:10], pl=FALSE)
+```
+
+
+Carrying Capacity 
+```{r}
+vitals_sims <- as.data.frame(popfit$vitalscheck[c(-1),c(8,9,10)])
+names(vitals_sims) <- c("CarryingCap",
+                        "year", "sim")
+
+ggplot(vitals_sims) +
+  geom_line(aes(x = year, y = CarryingCap, group = sim), color = "grey", size = 0.5) +  
+  # geom_hline(yintercept = 143758, color = "red") +
+  theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
+  labs(title = "Carrying Capacity over time", 
+       x = "Year", 
+       y = "N/K") 
+```
+
+
+#### Abundance 
+
+
+```{r Total Abundance}
 dat.sum <- counts_overtime %>%
   group_by(sim, year) %>% 
   dplyr::mutate(n = rowSums(across(everything()), na.rm = TRUE))
@@ -133,18 +225,36 @@ dat.sum.prop  <- counts_overtime %>%
   mutate(total_pop = fawn_sum + female_sum+ male_sum) %>% 
   mutate(fawn_prop = fawn_sum/total_pop) %>% 
   mutate(female_prop = female_sum/total_pop) %>% 
-  mutate(male_prop = male_sum/total_pop) 
+  mutate(male_prop = male_sum/total_pop)
+
+# get average across all sims
+dat.sum.prop_avg  <- dat.sum.prop %>%
+  # Now group by year only to average across simulations
+  group_by(year) %>%
+  summarize(
+    avg_fawn_prop = mean(fawn_prop, na.rm = TRUE),
+    avg_female_prop = mean(female_prop, na.rm = TRUE),
+    avg_male_prop = mean(male_prop, na.rm = TRUE),
+    .groups = "drop"  # ungroup after summarizing
+  )
+
+
 
 
 ggplot(data = dat.sum.prop) +
   geom_line(aes(x = year, y = fawn_prop, group = sim), color = "red") +  
-  geom_line(aes(x = year, y = female_prop, group = sim), color = "blue") +  
+  geom_line(aes(x = year, y = female_prop, group = sim), color = "lightblue") +  
   geom_line(aes(x = year, y = male_prop, group = sim), color = "green") +  
+  
+  geom_line(data = dat.sum.prop_avg, aes(x = year, y = avg_fawn_prop), color = "darkred") +  
+  geom_line(data = dat.sum.prop_avg, aes(x = year, y = avg_female_prop), color = "darkblue") +  
+  geom_line(data = dat.sum.prop_avg, aes(x = year, y = avg_male_prop), color = "darkgreen") +  
   #geom_hline(yintercept = 43127, color = "red") +
   theme(axis.text=element_text(size=16), axis.title=element_text(size=20))+
   labs(title = "Proportional Abundance", 
        x = "Year", 
        y = "Proportion") 
+# Goal: fawns = 30%, does = 50%, bucks = 20% 
 ```
 
 
@@ -301,4 +411,18 @@ ggplot(data = dat.disease.prop) +
        x = "Year", 
        y = "Proportion") 
 ```
+
+
+Estimate R0
+```{r}
+
+```
+
+
+
+
+Other calibration parameters??
+
+
+
 

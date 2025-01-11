@@ -1,0 +1,415 @@
+---
+title: "Explore Disease Dynamics"
+author: "Annabelle"
+date: "2024-12-19"
+output: html_document
+---
+
+Load libraries and files 
+```{r, warning=FALSE}
+rm(list=ls())
+library(tidyverse)
+library(here)
+library(reshape2)
+
+# source("../SII_model/functions/CreateStableAgeStructure_func.R")
+# source("../SII_model/functions/popnmodel_func.R")
+# source("../SII_model/functions/sims_wrapper_func.R")
+# source("../SII_model/functions/randomsampling_func.R")
+
+```
+
+### ### Indirect Transmission (Fe) vs Environmental Resovior (E)
+
+### Option 1: Fe = beta * E
+```{r}
+beta = .4
+E = seq(10, 1000, by = 1)
+F = (beta * E) /(E + 1)
+
+plot(E, F)
+```
+Vary alpha 
+```{r}
+# Define the values for beta
+beta_values <- c(0.2, 0.4, 0.6, 0.8, 1.0)
+
+# Define the range of E
+E <- seq(10, 1000, by = 1)
+
+# Set up the plot
+plot(E, (beta_values[1] * E) / (E + 1), type = "l", col = 1, 
+     xlab = "E", ylab = "F", 
+     xlim = c(10, 1000), ylim = c(0, 1), 
+     main = "F vs E for different alpha values")
+
+# Add lines for the other values of beta
+for (beta in beta_values[-1]) {
+  lines(E, (beta * E) / (E + 1), col = which(beta_values == beta))
+}
+
+# Add a legend
+legend("topright", legend = paste("alpha =", beta_values), 
+       col = 1:length(beta_values), lty = 1, cex = 0.8)
+
+```
+
+
+### Option 2: Fe = e^(-beta * (E-Ec) )
+```{r}
+beta = .003
+E = seq(10, 1000, by = 1)
+Ec = 10 #Threshold density 
+F = 1 - exp(-beta * (E-Ec) ) # note, modified original equation to get correct relationship 
+
+plot(E, F)
+```
+Note - Fe is bound from 0 - 1 so I'm not sure this is right
+
+
+```{r}
+# Define the values for beta
+beta_values <- c(0.003, 0.005, 0.007, 0.01, .05, .1)
+
+# Define the range of E and the threshold Ec
+E <- seq(10, 1000, by = 1)
+Ec <- 10
+
+# Set up the plot for the first beta value
+plot(E, 1 - exp(-beta_values[1] * (E - Ec)), type = "l", col = 1, 
+     xlab = "E", ylab = "F", 
+     xlim = c(10, 1000), ylim = c(0, 1), 
+     main = "F vs E for different gamma values")
+
+# Add lines for the other values of beta
+for (beta in beta_values[-1]) {
+  lines(E, 1 - exp(-beta * (E - Ec)), col = which(beta_values == beta))
+}
+
+# Add a legend
+legend("topright", legend = paste("gamma =", beta_values), 
+       col = 1:length(beta_values), lty = 1, cex = 0.8)
+
+```
+
+
+```{r}
+# Define the values for beta and Ec
+beta_value <- 0.003  # Fixed beta value
+Ec_values <- c(5, 10, 20, 30)  # Different threshold densities
+
+# Define the range of E
+E <- seq(10, 1000, by = 1)
+
+# Set up the plot for the first Ec value
+plot(E, 1 - exp(-beta_value * (E - Ec_values[1])), type = "l", col = 1, 
+     xlab = "E", ylab = "F", 
+     xlim = c(10, 1000), ylim = c(0, 1), 
+     main = "F vs E for different Ec values (Fixed gamma)")
+
+# Add lines for the other Ec values
+for (Ec in Ec_values[-1]) {
+  lines(E, 1 - exp(-beta_value * (E - Ec)), col = which(Ec_values == Ec))
+}
+
+# Add a legend
+legend("topright", legend = paste("Ec =", Ec_values), 
+       col = 1:length(Ec_values), lty = 1, cex = 0.8)
+
+
+```
+
+
+
+### Option 3: Fe = ke * ln(1 + lambda*((Pe * E) / (ke * (1 + sigma * E)) ) )
+```{r}
+E = seq(10, 1000, by = 1)
+ke = .3 # aggregation of contacts with deposits 
+lambda = .1 # rate of contact with deposits 
+Pe = .2 #prob of contact (transmission)
+sigma = 0.001 # prion saturation constant
+F = ke * log(1 + lambda*((Pe * E) / (ke * (1 + sigma * E)) ) )
+
+plot(E, F)
+```
+
+```{r}
+# Define the range of E
+E <- seq(10, 1000, by = 1)
+
+# Define the constant values for the parameters
+ke_values <- c(0.3, 0.5, 0.7)   # Vary ke
+lambda_values <- c(0.1, 0.2, 0.3)  # Vary lambda
+Pe_values <- c(0.2, 0.4, 0.6)    # Vary Pe
+sigma_values <- c(0.001, 0.01, 0.02)  # Vary sigma
+
+# Define the base formula for F
+F_formula <- function(ke, lambda, Pe, sigma, E) {
+  ke * log(1 + lambda * ((Pe * E) / (ke * (1 + sigma * E))))
+}
+
+# --- Separate Plots for each parameter ---
+# Plot 1: Vary ke
+par(mfrow=c(2, 2))  # Set up a 2x2 grid for plotting
+
+plot(E, F_formula(ke = ke_values[1], lambda = 0.1, Pe = 0.2, sigma = 0.001, E), type = "l", col = 1,
+     xlab = "E", ylab = "F", main = "F vs E for varying ke", xlim = c(10, 1000), ylim = c(0, max(F_formula(ke = max(ke_values), lambda = 0.1, Pe = 0.2, sigma = 0.001, E))))
+for (ke in ke_values[-1]) {
+  lines(E, F_formula(ke = ke, lambda = 0.1, Pe = 0.2, sigma = 0.001, E), col = which(ke_values == ke))
+}
+legend("topright", legend = paste("ke =", ke_values), col = 1:length(ke_values), lty = 1)
+
+# Plot 2: Vary lambda
+plot(E, F_formula(ke = 0.3, lambda = lambda_values[1], Pe = 0.2, sigma = 0.001, E), type = "l", col = 1,
+     xlab = "E", ylab = "F", main = "F vs E for varying lambda", xlim = c(10, 1000), ylim = c(0, max(F_formula(ke = 0.3, lambda = max(lambda_values), Pe = 0.2, sigma = 0.001, E))))
+for (lambda in lambda_values[-1]) {
+  lines(E, F_formula(ke = 0.3, lambda = lambda, Pe = 0.2, sigma = 0.001, E), col = which(lambda_values == lambda))
+}
+legend("topright", legend = paste("lambda =", lambda_values), col = 1:length(lambda_values), lty = 1)
+
+# Plot 3: Vary Pe
+plot(E, F_formula(ke = 0.3, lambda = 0.1, Pe = Pe_values[1], sigma = 0.001, E), type = "l", col = 1,
+     xlab = "E", ylab = "F", main = "F vs E for varying Pe", xlim = c(10, 1000), ylim = c(0, max(F_formula(ke = 0.3, lambda = 0.1, Pe = max(Pe_values), sigma = 0.001, E))))
+for (Pe in Pe_values[-1]) {
+  lines(E, F_formula(ke = 0.3, lambda = 0.1, Pe = Pe, sigma = 0.001, E), col = which(Pe_values == Pe))
+}
+legend("topright", legend = paste("Pe =", Pe_values), col = 1:length(Pe_values), lty = 1)
+
+# Plot 4: Vary sigma
+plot(E, F_formula(ke = 0.3, lambda = 0.1, Pe = 0.2, sigma = sigma_values[1], E), type = "l", col = 1,
+     xlab = "E", ylab = "F", main = "F vs E for varying sigma", xlim = c(10, 1000), ylim = c(0, 1))
+for (sigma in sigma_values[-1]) {
+  lines(E, F_formula(ke = 0.3, lambda = 0.1, Pe = 0.2, sigma = sigma, E), col = which(sigma_values == sigma))
+}
+legend("topright", legend = paste("sigma =", sigma_values), col = 1:length(sigma_values), lty = 1)
+
+
+```
+
+This is wrong.... 
+```{r}
+
+# Define the range of E
+E <- seq(10, 1000, by = 1)
+
+# Define the constant values for the parameters
+ke_values <- c(0.3, 0.5, 0.7)   # Vary ke
+lambda_values <- c(0.1, 0.2, 0.3)  # Vary lambda
+Pe_values <- c(0.2, 0.4, 0.6)    # Vary Pe
+sigma_values <- c(0.001, 0.01, 0.02)  # Vary sigma
+
+# Define the base formula for F
+F_formula <- function(ke, lambda, Pe, sigma, E) {
+  ke * log(1 + lambda * ((Pe * E) / (ke * (1 + sigma * E))))
+}
+
+# Create a plot for each combination of parameters
+par(mfrow = c(3, 3))  # Set up a 3x3 grid of plots
+for (ke in ke_values) {
+  for (lambda in lambda_values) {
+    for (Pe in Pe_values) {
+      for (sigma in sigma_values) {
+        # Compute F for the current combination of parameters
+        F <- F_formula(ke, lambda, Pe, sigma, E)
+        
+        # Create the plot
+        plot(E, F, type = "l", main = paste("ke =", ke, "lambda =", lambda, "Pe =", Pe, "sigma =", sigma),
+             xlab = "E", ylab = "F", col = "blue", lwd = 2)
+      }
+    }
+  }
+}
+
+
+```
+
+
+
+```{r}
+# Create a PNG file to save the plot with a larger size
+png("F_vs_E_plot.png", width = 1000, height = 800)
+
+# Define the range of E
+E <- seq(10, 1000, by = 1)
+
+# Define the constant values for the parameters
+ke_values <- c(0.3, 0.5, 0.7)   # Vary ke
+lambda_values <- c(0.1, 0.2, 0.3)  # Vary lambda
+Pe_values <- c(0.2, 0.4, 0.6)    # Vary Pe
+sigma_values <- c(0.001, 0.01, 0.02)  # Vary sigma
+
+# Define the base formula for F
+F_formula <- function(ke, lambda, Pe, sigma, E) {
+  ke * log(1 + lambda * ((Pe * E) / (ke * (1 + sigma * E))))
+}
+
+# Create a plot with all lines
+plot(E, F_formula(ke_values[1], lambda_values[1], Pe_values[1], sigma_values[1], E), type = "l",
+     xlab = "E", ylab = "F", col = "blue", lwd = 2, xlim = range(E), ylim = range(sapply(ke_values, function(ke) 
+      sapply(lambda_values, function(lambda) 
+        sapply(Pe_values, function(Pe) 
+          sapply(sigma_values, function(sigma) 
+            max(F_formula(ke, lambda, Pe, sigma, E))))))))
+
+# Add lines for each combination of parameters
+for (ke in ke_values) {
+  for (lambda in lambda_values) {
+    for (Pe in Pe_values) {
+      for (sigma in sigma_values) {
+        F <- F_formula(ke, lambda, Pe, sigma, E)
+        lines(E, F, col = rgb(ke, lambda, Pe), lwd = 2)  # Different color for each combination
+      }
+    }
+  }
+}
+
+# Add a legend (simplified or removed to prevent overlap)
+legend("topright", legend = paste("ke =", ke_values, ", lambda =", lambda_values, ", Pe =", Pe_values, ", sigma =", sigma_values),
+       col = rainbow(length(ke_values) * length(lambda_values) * length(Pe_values) * length(sigma_values)), lwd = 2)
+
+# Close the PNG file
+dev.off()
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+### ### Farm years
+## Calculate prevalence 
+prev <- seq(0, .4, .01)
+
+# set beta values and adjust 
+alpha = .01
+beta1 = 2 # prevalence 
+beta2 = -.8 # double fencing reduces by 80% 
+beta3 = .1 # movement 
+
+x1 = prev # prevalence in the wild 
+x2 = action1 = 1 # double fencing (indicator)
+x3 = action2 = 1 # movement or export of captive individuals (action: restriction)
+
+mu = alpha + beta1*x1 + beta2*x2 + beta3*x3
+
+p <- plogis(mu) # need logistic tranformation function (do by hand)
+#logit(p) ~  rnorm(mu = a + bx1 + bx2… , sigma)
+farmsleft = 10 #need to make dynamic
+out <- rbinom(size = 1, n = farmsleft, prob  = p)
+## p value returned doesn't make sense... 
+
+
+### plot probability (p) vs prevalence for 4 different senarios 
+# a. x2 = 1, x3 = 0 
+
+x2 = action1 = 1 # double fencing (indicator)
+x3 = action2 = 0 # movement or export of captive individuals (action: restriction)
+
+mu = alpha + beta1*x1 + beta2*x2 + beta3*x3
+pa <- plogis(mu) # need logistic tranformation function (do by hand)
+
+# b. x2 = 0, x3 = 1 
+x2 = action1 = 0 # double fencing (indicator)
+x3 = action2 = 1 # movement or export of captive individuals (action: restriction)
+
+mu = alpha + beta1*x1 + beta2*x2 + beta3*x3
+pb <- plogis(mu) # need logistic tranformation function (do by hand)
+
+# c. x2 = 1, x3 = 1
+x2 = action1 = 1 # double fencing (indicator)
+x3 = action2 = 1 # movement or export of captive individuals (action: restriction)
+
+mu = alpha + beta1*x1 + beta2*x2 + beta3*x3
+pc <- plogis(mu) # need logistic tranformation function (do by hand)
+
+# d. x2 = 0, x3 = 0 
+x2 = action1 = 0 # double fencing (indicator)
+x3 = action2 = 0 # movement or export of captive individuals (action: restriction)
+
+mu = alpha + beta1*x1 + beta2*x2 + beta3*x3
+pd <- plogis(mu) # need logistic tranformation function (do by hand)
+
+
+prev_df <- as.data.frame(cbind(prev, pa, pb, pc, pd))
+
+
+ggplot(data = prev_df) +
+  geom_line(aes(x = prev, y = pa, color = "pa")) + 
+  geom_line(aes(x = prev, y = pb, color = "pb")) + 
+  geom_line(aes(x = prev, y = pc, color = "pc")) + 
+  geom_line(aes(x = prev, y = pd, color = "pd")) +
+  scale_color_manual(
+    values = c("pa" = "lightblue", "pb" = "lightgreen", "pc" = "purple", "pd" = "black"),
+    labels = c("double fencing = 1, movement = 0", "double fencing = 0, movement = 1", "double fencing = 1, movement = 1", "double fencing = 0, movement = 0")  # Manual labels for the legend
+  ) +
+  labs(color = "Legend", y = "Probability", x = "Prevalence") 
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+params <- list(
+  fawn.an.sur = 0.7, fawn.an.sur.var= 0.005, juv.f.an.sur = 0.8, juv.f.an.sur.var=0.005, juv.m.an.sur = .8, juv.m.an.sur.var=0.005, ad.an.f.sur = 0.87, ad.an.f.sur.var=0.005, ad.an.m.sur = 0.75, ad.an.m.sur.var=0.005,
+  
+  juv.repro = 2.6, ad.repro = 2.8,   repro.var = 0.005,
+  
+  hunt.mort.fawn = 0.01, hunt.mort.juv.f = 0.1, hunt.mort.juv.m = 0.1, hunt.mort.ad.f = 0.2, hunt.mort.ad.m = 0.45, hunt.var = 0.005,
+  
+  # temp set these to 0 for calibration
+  switchdiseasedy_on = 1, # turn disease dynamics on or off (on = 1)
+  arrival_input = c(100,100,1,1,1,1,5, 1, 8, 14), # currently set for 10 years 
+  
+  i.rate = .5,
+  env = 0, shedrate_I = .5, shedrate_H = .5, shedrate_ND = .5, expdecayconstant = .55, beta = .4,
+  
+  #model 1
+  model1 = 1, # this selects set up for Vasilyeva et al. paper
+   ke = .1, lambda = .1, Pe = .1, sigma = .1,
+  #model 2?
+  ## ???
+  
+  nyears = 50, n0 = 143000, K = 300000,
+  
+  ### Action parameters
+  nosampled = 5,
+  
+  
+  ### Farm Years - comodel 
+  alpha = .01, beta1 = .3, beta2 = .3, beta3 = .3
+  )
+```
+
+
+```{r}
+# popfit <- sims_wrapper(params,  50)
+# 
+# counts_overtime <- as.data.frame(popfit$counts)
+# 
+# harvest_overtime <- as.data.frame(popfit$harvest)
+
+```
+

@@ -101,6 +101,19 @@ est_beta_params <- function(mu, var) {
   return(params = list(alpha = alpha, beta = beta))
 }
 
+est_gamma_params <- function(mu, var) {
+  # Check that variance is positive and not too large for given mean
+  if (var <= 0) {
+    stop("Variance must be positive.")
+  }
+  
+  # Estimate alpha (shape) and theta (scale) parameters
+  alpha <- mu^2 / var
+  theta <- var / mu
+  
+  return(params = list(alpha = alpha, theta = theta))
+}
+
 
 cwd_stoch_model <- function(params) {
 
@@ -117,9 +130,18 @@ cwd_stoch_model <- function(params) {
   
   # for hunted
   hunted <- popout
+  # for surviellance sampling 
+  samp <- popout
   
   # for Environmental reservoir  
   envres <- matrix(0, nrow = nyears, ncol = 1)
+  
+  # For calibrating disease dynamics 
+  disease <- matrix(0, nrow = nyears, ncol = 2)
+  
+  # Need to check popn vital rates (survival, repro, carrying capacity) 
+  checkvitals <- matrix(0, nrow = nyears, ncol = 8)
+
   
   # CWD matrix 
   ### Need to set up a way to keep track of diseased individuals 
@@ -129,6 +151,21 @@ cwd_stoch_model <- function(params) {
   popout[1,] <- c(stablestate[1:2], stablestate[4], stablestate[3], stablestate[5], rep(0, 9))
   hunted[1,] <- c(popout[1,1] * hunt.mort.fawn, popout[1,2] * hunt.mort.juv.f, popout[1,3] * hunt.mort.juv.m, popout[1,4] * hunt.mort.ad.f, popout[1,5] * hunt.mort.ad.m, rep(0, 9))
     
+  ### Assuming diseased individuals are just added on top of pre-existing population 
+  if(switchdiseasedy_on == 1){
+    arrival <- c(arrival_input, rep(0, nyears - length(arrival_input))) # arrival vec should be same length as number of years, this is just a fail safe
+    if(arrival[1] == 0){ # if no new individuals arrive year 1, do nothing
+    } else{
+      split <- as.vector(table(sample(1:4, size = arrival[1], replace = T))) #assume equally likely btw males and females and adults and yearlings
+      if(length(split) <= 3){ 
+        if(split[2] < 1){ split[2] <- 0}
+        if(split[3] < 1){ split[3] <- 0}
+        if(split[4] < 1){ split[4] <- 0}
+        }# otherwise have issues
+      popout[1,c(11:14)] <- split
+    }
+  
+  }
 
 
   ##estimate vitals##
@@ -146,46 +183,70 @@ cwd_stoch_model <- function(params) {
   hunt.m.beta <- est_beta_params(hunt.mort.ad.m, hunt.var)
   
   ### Reproduction 
-  juv.r.beta <- est_beta_params(juv.repro/2, repro.var)
-  ad.r.beta <- est_beta_params(ad.repro/2, repro.var)
-  ### !!!!! Is this right?? Do we want to divide by 2??? 
+  # juv.r.beta <- est_beta_params(juv.repro/2, repro.var)
+  # ad.r.beta <- est_beta_params(ad.repro/2, repro.var)
+  
+  juv.r.gamma <- est_gamma_params(juv.repro/2, repro.var)
+  ad.r.gamma <- est_gamma_params(ad.repro/2, repro.var)
+  
   
   for(t in 2:nyears){
-    ## if there is too much inter annual variation, move this outside year
-    fawn.sur <- rbeta(1, fawn.sur.beta$alpha, fawn.sur.beta$beta)
-    juv.f.sur <- rbeta(1, juv.f.sur.beta$alpha, juv.f.sur.beta$beta)
-    juv.m.sur <- rbeta(1, juv.m.sur.beta$alpha, juv.m.sur.beta$beta)
-    ad.f.sur <- rbeta(1, ad.f.sur.beta$alpha, ad.f.sur.beta$beta)
-    ad.m.sur <- rbeta(1, ad.m.sur.beta$alpha, ad.m.sur.beta$beta)
+    if(switch_stoch_survival_rates == 1){
+      ## if there is too much inter annual variation, move this outside year
+      fawn.sur <- rbeta(1, fawn.sur.beta$alpha, fawn.sur.beta$beta)
+      juv.f.sur <- rbeta(1, juv.f.sur.beta$alpha, juv.f.sur.beta$beta)
+      juv.m.sur <- rbeta(1, juv.m.sur.beta$alpha, juv.m.sur.beta$beta)
+      ad.f.sur <- rbeta(1, ad.f.sur.beta$alpha, ad.f.sur.beta$beta)
+      ad.m.sur <- rbeta(1, ad.m.sur.beta$alpha, ad.m.sur.beta$beta)
+      } else{
+        ### Survival
+        fawn.sur <- fawn.an.sur
+        juv.f.sur <- juv.f.an.sur
+        juv.m.sur <- juv.m.an.sur
+        ad.f.sur <- ad.an.f.sur
+        ad.m.sur <- ad.an.m.sur 
+      }
     
-    # stochastic hunting survival rates
-    hunt.fawn <- rbeta(1, hunt.fawn.beta$alpha, hunt.fawn.beta$beta, ncp = 0)
-    hunt.juv.f <- rbeta(1, hunt.juv.f.beta$alpha, hunt.juv.f.beta$beta, ncp = 0)
-    hunt.juv.m <- rbeta(1, hunt.juv.m.beta$alpha, hunt.juv.m.beta$beta, ncp = 0)
-    hunt.ad.f <- rbeta(1, hunt.f.beta$alpha, hunt.f.beta$beta, ncp = 0)
-    hunt.ad.m <- rbeta(1, hunt.m.beta$alpha, hunt.m.beta$beta, ncp = 0)
-    
-    # yearly stochastic reproductive rates
-    
-    
-    juv.repro.draw <- rbeta(1, juv.r.beta$alpha, juv.r.beta$beta, ncp = 0)
-    ad.repro.draw <- rbeta(1, ad.r.beta$alpha, ad.r.beta$beta, ncp = 0)
+    if(switch_stoch_hunt_rates == 1){ 
+      # stochastic hunting survival rates
+      hunt.fawn <- rbeta(1, hunt.fawn.beta$alpha, hunt.fawn.beta$beta, ncp = 0)
+      hunt.juv.f <- rbeta(1, hunt.juv.f.beta$alpha, hunt.juv.f.beta$beta, ncp = 0)
+      hunt.juv.m <- rbeta(1, hunt.juv.m.beta$alpha, hunt.juv.m.beta$beta, ncp = 0)
+      hunt.ad.f <- rbeta(1, hunt.f.beta$alpha, hunt.f.beta$beta, ncp = 0)
+      hunt.ad.m <- rbeta(1, hunt.m.beta$alpha, hunt.m.beta$beta, ncp = 0)
+    }else{
+      ### Hunting 
+      hunt.fawn <- hunt.mort.fawn 
+      hunt.juv.f <- hunt.mort.juv.f 
+      hunt.juv.m <- hunt.mort.juv.m 
+      hunt.ad.f <- hunt.mort.ad.f
+      hunt.ad.m <- hunt.mort.ad.m
+    }
+      
+      # yearly stochastic reproductive rates
+      
+      if(switch_stoch_repro_rates == 1){       
+      
+      # Generate random samples from the Gamma distribution
+      juv.repro.draw <- rgamma(1, juv.r.gamma$alpha, scale = juv.r.gamma$theta)*2 * (1 - (sum(popout[t-1,])/K))
+      ad.repro.draw <- rgamma(1, ad.r.gamma$alpha, scale = ad.r.gamma$theta)*2 * (1 - (sum(popout[t-1,])/K))
+    } else {
+      
+      ### Reproduction 
+      juv.repro.draw <- juv.repro
+      ad.repro.draw <- ad.repro
+    }
 
-    ### Disease dynamics
-    # transmission rate (or the rate of contact) beta and the probability of infection given that contact occurred
-
-    e.rate <- (sum(popout[t,-c(1:5)])/sum(popout[t,])) *R0
-    if(is.na(e.rate)){
+    
+    ### log vitals
+    checkvitals[t,] <- c(fawn.sur, juv.f.sur, juv.m.sur, ad.f.sur, ad.m.sur, 
+                            juv.repro.draw, ad.repro.draw, (sum(popout[t-1,])/K) ) 
+    
+    if(t == 2){ # no movement on the first time step? Don't think this is right... 
       e.rate <- 0 
     }
     
-    envres[t,] <- envres[t-1,] + sum(popout[t,c(11:14)]*shedrate) - (envres[t-1,] * expdecayconstant)
-    
-    ## envres needs to feed into indirect transmission
-    # additive in beta? 
-    # contact rate and contact given exposure 
-    
-    
+
     ### Susceptible Category 
     # Fawns
     popout[t,1] <- (popout[t-1,2] * (1- hunt.juv.f) * juv.repro.draw * juv.f.sur * (1-e.rate) ) + 
@@ -249,15 +310,49 @@ cwd_stoch_model <- function(params) {
       (popout[t-1,14] * (1- hunt.ad.m) * ad.m.sur) +
       (popout[t-1,12] * (1 - hunt.juv.m) * juv.m.sur)
     
-    # ### Update the environmental load
-    # no.infect.indiv <- sum(juv.f.I.N, juv.m.I.N, ad.f.I.N, ad.m.I.N)
-    # env <- env + (no.infect.indiv * shedrate) - (expdecayconstant * env)
-    # 
-    # ### Update e
-    # # This needs work!!! [after fitted to susceptible data..]
-    # no.susceptible.indiv <- sum(juv.f.S.N, juv.m.S.N, ad.f.S.N, ad.m.S.N)
-    # # beta?? 
-    # # e = beta * no.infect.indiv * no.susceptible.indiv + env
+    
+    ### ### Disease dynamics
+    if(switchdiseasedy_on == 1){ # this is turned on in params
+      
+    ### from individuals arriving from out of state
+    split <- as.vector(table(sample(1:4, size = arrival[t], replace = T)))
+    ### Need to make this conditional or get error when nothing new to add
+    if(sum(split) != 0){
+      if(length(split) <= 3){ 
+        if(split[2] < 1 | is.na(split[2])){ split[2] <- 0}
+        if(split[3] < 1 | is.na(split[3])){ split[3] <- 0}
+        if(split[4] < 1 | is.na(split[4])){ split[4] <- 0}
+      }# otherwise have issues
+      popout[t,c(11:14)] <- popout[t,c(11:14)] + split
+    }
+    
+    ### Update the environmental load
+    no.infect.indiv <- sum(popout[t,c(11:14)])
+    envres[t,] <- (no.infect.indiv * shedrate_I) + (no.infect.indiv * shedrate_H) +
+      (no.infect.indiv * shedrate_ND) +(exp(expdecayconstant) * envres[t-1,])
+
+    
+    if(model1 == 1){
+      Fe = ke * log(1 + (lambda * ((Pe*envres[t,])/(ke*(1 + sigma * envres[t,])))))
+      # !! What do we set parameters as?? 
+    }else { #model 2 
+      ### unclear what this should be - just looks like a single parameter beta?
+    }
+    
+    ### Update e
+    # transmission rate (or the rate of contact) beta and the probability of infection given that contact occurred
+    e.rate <- ((sum(popout[t,-c(1:5)]))/sum(popout[t,])) *(sum(popout[t,c(1:5)])) * beta + Fe
+    if(is.na(e.rate)){
+      e.rate <- 0 
+    }
+    
+    ## delete later - compare relationship between Fe and e
+    disease[t,1] <- e.rate
+    disease[t,2] <- Fe
+    
+    } else {
+      e.rate <- 0 # for when disease dynamics aren't turned on 
+    }
 
 
     ## Need count of number of dead/removed individuals
@@ -265,9 +360,51 @@ cwd_stoch_model <- function(params) {
                   popout[t,6] * hunt.fawn, popout[t,7] * hunt.juv.f, popout[t,8] * hunt.juv.m, popout[t,9] * hunt.ad.f, popout[t,10] * hunt.ad.m, 
                                                 popout[t,11] * hunt.juv.f, popout[t,12] * hunt.juv.m, popout[t,13] * hunt.ad.f, popout[t,14] * hunt.ad.m)
     
+    
+    ### Surveillance starts here.. 
+    # bio check 10% or less of total harvest - randomly select 10% of available harvest
+    # no. individuals available for sampling
+    sampfromhunt <- sum(hunted[t,])*.1
+    
+    ### Check if number of individuals available for sampling is more or less than target
+    # target number of deer to check = nosampled (set in params)
+    if(sampfromhunt < nosampled){
+      availableSamples <- sampfromhunt
+    } else{
+      availableSamples <- nosampled
+    }
+
+    # randomly draw samples
+    samp[t, ] <- randomsampling(matrix = hunted[t,], target_sum = availableSamples, emptysample = samp[t, ])
+
+    # see how many of the samples have infected individuals
+    # NOTE - assuming can only detect it in infected individuals (not including exposed)
+    no.found.infected <-   sum(samp[t, grep("\\.I\\.", colnames(samp), ignore.case = TRUE)])
+    #if this is more than one, trigger actions
+    
+    
+    ### ### Farm years
+    ## Calculate TRUE prevalence 
+    prev <- .2
+    
+    x1 = prev = 0 # prevalence in the wild 
+    x2 = action1 = 1 # double fencing (indicator)
+    x3 = action2 = 1 # movement or export of captive individuals (action: restriction)
+
+    mu = alpha + beta1*x1 + beta2*x2 + beta3*x3
+    
+    p <- plogis(mu) # need logistic tranformation function (do by hand)
+    #logit(p) ~  rnorm(mu = a + bx1 + bx2… , sigma)
+    farmsleft = 10 #need to make dynamic
+    out <- rbinom(size = 1, n = farmsleft, prob  = p)
+    ## p value returned doesn't make sense... 
+    
+    
+    
   } ## Close timeloop   
   
-  output <- list(counts = popout, removed = hunted)
+  output <- list(counts = popout, removed = hunted, environemnt = envres, diseaseexplore = disease,
+                 checkvitals = checkvitals)
   
   return(output)
 }

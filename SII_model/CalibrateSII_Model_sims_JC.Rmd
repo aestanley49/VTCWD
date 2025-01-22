@@ -13,7 +13,7 @@ library(here)
 library(reshape2)
 
 source("../SII_model/functions/CreateStableAgeStructure_func.R")
-source("../SII_model/functions/popnmodel_func.R")
+source("../SII_model/functions/popnmodel_func_JC.R")
 source("../SII_model/functions/sims_wrapper_func.R")
 source("../SII_model/functions/randomsampling_func.R")
 

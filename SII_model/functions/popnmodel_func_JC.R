@@ -360,9 +360,20 @@ cwd_stoch_model <- function(params) {
 
 
     ## Need count of number of dead/removed individuals
-    hunted[t,] <- c(popout[t,1] * hunt.fawn, popout[t,2] * hunt.juv.f, popout[t,3] * hunt.juv.m, popout[t,4] * hunt.ad.f, popout[t,5] * hunt.ad.m, 
-                  popout[t,6] * hunt.fawn, popout[t,7] * hunt.juv.f, popout[t,8] * hunt.juv.m, popout[t,9] * hunt.ad.f, popout[t,10] * hunt.ad.m, 
-                                                popout[t,11] * hunt.juv.f, popout[t,12] * hunt.juv.m, popout[t,13] * hunt.ad.f, popout[t,14] * hunt.ad.m)
+    #hunted[t,] <- c(popout[t,1] * hunt.fawn, popout[t,2] * hunt.juv.f, popout[t,3] * hunt.juv.m, popout[t,4] * hunt.ad.f, popout[t,5] * hunt.ad.m, 
+    #             popout[t,6] * hunt.fawn, popout[t,7] * hunt.juv.f, popout[t,8] * hunt.juv.m, popout[t,9] * hunt.ad.f, popout[t,10] * hunt.ad.m, 
+    #                                            popout[t,11] * hunt.juv.f, popout[t,12] * hunt.juv.m, popout[t,13] * hunt.ad.f, popout[t,14] * hunt.ad.m)
+
+
+     ## Need count of number of dead/removed individuals JC - your backcalculation for hunting does not include natural mortality - it should. I don't know when your model is assumed to start though.
+    hunted[t,] <- c(popout[t,1] * hunt.fawn * (fawn.an.sur ^ (7/12)), popout[t,2] * hunt.juv.f * (juv.f.an.sur ^ (7/12)), 
+                    popout[t,3] * hunt.juv.m * (juv.m.an.sur ^ (7/12)), popout[t,4] * hunt.ad.f * (ad.an.f.sur ^ (7/12)), 
+                    popout[t,5] * hunt.ad.m * (ad.an.m.sur ^ (7/12)), popout[t,6] * hunt.fawn * (fawn.an.sur ^ (7/12)), 
+                    popout[t,7] * hunt.juv.f * (juv.f.an.sur ^ (7/12)), popout[t,8] * hunt.juv.m * (juv.m.an.sur ^ (7/12)), 
+                    popout[t,9] * hunt.ad.f * (ad.an.f.sur ^ (7/12)), popout[t,10] * hunt.ad.m * (ad.an.m.sur ^ (7/12)), 
+                    popout[t,11] * hunt.juv.f * (juv.f.an.sur ^ (7/12)), popout[t,12] * hunt.juv.m * (juv.m.an.sur ^ (7/12)), 
+                    popout[t,13] * hunt.ad.f * (ad.an.f.sur ^ (7/12)), popout[t,14] * hunt.ad.m * (ad.an.m.sur ^ (7/12)))
+    
     
     
 #     ### Surveillance starts here.. 

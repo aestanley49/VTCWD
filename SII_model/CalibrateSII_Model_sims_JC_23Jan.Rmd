@@ -59,7 +59,7 @@ params <- list(
   shedrate_I = .005, 
   shedrate_H = .5, 
   shedrate_ND = .5, 
-  expdecayconstant = 10.5, 
+  expdecayconstant = 3, 
   beta.d.min = 0.75, # roughly from Jennelle et al. 2014.
   beta.d.max=1.5,   # roughly from Jennelle et al. 2014.
   beta.e.min = 0.00000015, 

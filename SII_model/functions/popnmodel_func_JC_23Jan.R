@@ -270,7 +270,7 @@ cwd_stoch_model <- function(params) {
       no.infect.indiv <- sum(popout[t-1,c(11:14)])
       
       envres[t,] <- (no.infect.indiv * shedrate_I) + (no.infect.indiv*0.2 * shedrate_H) +
-        (no.infect.indiv*0.2 * shedrate_ND) + (exp(-expdecayconstant) * envres[t-1,])
+        (no.infect.indiv*0.2 * shedrate_ND) - (exp(-expdecayconstant) * envres[t-1,])
       
       # transmission rate (or the rate of contact) beta and the probability of infection given that contact occurred
       e.rate <- ifelse(((((sum(popout[t-1,-c(1:10)]))/sum(popout[t-1,])) * beta.d) + (envres[t,] * beta.e))<1, 

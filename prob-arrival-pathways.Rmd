@@ -1,0 +1,197 @@
+---
+title: 'Probability of Arrival Pathways: Mental Models'
+author: "Annabelle"
+date: "2025-02-12"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+
+### Contaminated PPE (Wild deer other states --> wild deer VT)
+
+function of the prevalence in other states - ultimately going to be very low (.027 prob when prev is 40) intercept = -7.2 & slope = .09
+
+```{r, echo=FALSE}
+#https://insects.shinyapps.io/Probability_Dists/
+
+int = -7.2
+slope = .09
+
+X = 40
+
+predicted_prob = plogis(int + X*slope)
+byhand = 1/ (1 + exp(-(int+X*slope)))
+
+int = -7
+slope = 1.9
+
+X = seq(0, .40, by = 0.01)
+predicted_prob = plogis(int + X*slope)
+# plot(X, predicted_prob)
+
+df <- as.data.frame(cbind(X, predicted_prob))
+
+ggplot(data = df) +
+  geom_line(aes(x = X, y = predicted_prob, color = "ppe")) + 
+  scale_color_manual(
+    values = c("ppe" = "blue")) +
+  labs(y = "Probability", x = "Prevalence")
+
+
+```
+
+
+
+
+### Animal movement (Wild deer other states --> wild deer VT)
+Also needs to be based on distance as well as prevalence 
+
+The following graph is based on the disease being 20 miles away 
+
+
+
+```{r, echo=FALSE}
+
+x1 = seq(0, .40, by = 0.01)
+beta0 = -5.95 
+beta1 = 6 
+beta2 = 1 
+
+# Lets say it needs to be at least 40 miles from boarder first, after that, need to normalize from 40 to 0 miles so that have 40 miles = 0 and 0 miles from boarder = 1 
+miles = seq(0, 40, by = 1)
+
+normalize <- function(x, na.rm = TRUE) {
+    return((x- max(x)) /(min(x)-max(x)))
+}
+
+miles_norm <- normalize(miles)
+x2 = .5 ## Basically going to adjust the slope based on how far away the disease is
+mu = (beta0) + (beta1 + beta2*x2)*x1 
+p <- plogis(mu) # need logistic tranformation function (do by hand)
+
+# plot(x1, p)
+
+df <- as.data.frame(cbind(x1, p))
+
+ggplot(data = df) +
+  geom_line(aes(x = x1, y = p, color = "animal_move")) + 
+  scale_color_manual(
+    values = c("animal_move" = "purple")) +
+  labs(y = "Probability", x = "Prevalence")
+
+```
+
+
+### Urine lures (captive other states --> wild deer VT)
+
+risk increases over time (prion accumulation)
+
+two actions:
+
+Ban natural scent-based lures
+
+Ban all scent-based lures (including synthetic)
+
+```{r, echo=FALSE}
+
+int = -7
+slope = .17
+beta1 = -.07 #for action 1
+beta2 = -.14 # for action 2
+
+X = seq(0, 25, by = 1) # time (25 years)
+
+x1 = action1 = 0 # ban natural scent-based lures
+x2 = action2 = 0 # ban all lures 
+
+prob_noaction = plogis(int + X*(slope + beta1*x1 + beta2*x2))
+
+# If only ban scent-based 
+x1 = actionB = 1 # ban natural scent-based lures
+x2 = actionK = 0 # ban all lures 
+
+prob_nonaturalscents = plogis(int + X*(slope + beta1*x1 + beta2*x2))
+
+# If ban all 
+
+x1 = action1 = 0 # ban natural scent-based lures
+x2 = action2 = 1 # ban all lures 
+
+prob_ban_all = plogis(int + X*(slope + beta1*x1 + beta2*x2))
+# plot(X, predicted_prob)
+
+df <- as.data.frame(cbind(X, prob_noaction, prob_nonaturalscents, prob_ban_all))
+## This is off... 
+ggplot(data = df) +
+  geom_line(aes(x = X, y = prob_noaction, color = "prob_noaction")) + 
+  geom_line(aes(x = X, y = prob_nonaturalscents, color = "prob_nonaturalscents")) + 
+  geom_line(aes(x = X, y = prob_ban_all, color = "prob_ban_all")) + 
+  scale_color_manual(
+    values = c("prob_noaction" = "purple", "prob_nonaturalscents" = "blue", "prob_ban_all" = "black" ),
+    labels = c("Ban all scent-based lures (including synthetic)", "no actions","Ban natural scent lures")  # Manual labels for the legend
+  )+
+  labs(color = "Legend", y = "Probability", x = "Time (years)")
+```
+
+
+
+
+### Carcass movement (Wild deer other states --> wild deer VT)
+Also needs to be based on distance as well as prevalence  
+
+Lots of actions: 
+
+* A	Ban high risk parts from CWD positive states // movement of parts (status quo) 
+* C	Ban moose parts imports (change language to cervids) // movement of parts 
+* F	Enhanced guidelines for taxidermists/processors // movement of prions in state 
+* H	Private landowner carcass disposal guidelines // compliance + movement of parts 
+* I	Incorporate CWD info during license buying process // compliance 
+* J	Ban high risk parts from out of state for all states regardless of CWD status // movement of parts 
+* L	Ban taxidermists/processors from accepting/handling any parts from outside of Vermont // movement of parts 
+
+
+Proposal: 
+
+1.  Draw the number of deer harvested in a CWD+ area (this would be a function of time and prevalence - likely linked to natural movement model) 
+2.  Draw the probability of a hunter moving parts back (at status quo is average of 12%, change with actions) 
+3.  Probability of disposing on the landscape (split between taxidermists + processors vs private landowners, change with actions) 
+
+```{r, eval=FALSE, include=FALSE}
+
+### Draw of the number of deer harvested in a CWD area (function of time and prevalence)
+  # Linked to natural movement model 
+
+### Probability of hunter moving parts back (status quo value is a draw from 12%) - change with actions 
+
+# Split into taxidermist + processors (55%) // private landowners (45%)
+
+
+
+x1 = seq(0, .40, by = 0.01)
+beta0 = -2
+beta1 = 6 
+beta2 = 1 
+beta4 = 2 
+
+# Lets say it needs to be at least 40 miles from boarder first, after that, need to normalize from 40 to 0 miles so that have 40 miles = 0 and 0 miles from boarder = 1 
+miles = seq(0, 40, by = 1)
+
+normalize <- function(x, na.rm = TRUE) {
+    return((x- max(x)) /(min(x)-max(x)))
+}
+
+miles_norm <- normalize(miles)
+x2 = 1 ## Basically going to adjust the slope based on how far away the disease is
+mu = (beta0) + (beta1 + beta2*x2)*x1 
+p <- plogis(mu) # need logistic tranformation function (do by hand)
+
+plot(x1, p)
+
+```

@@ -3,22 +3,119 @@ title: 'Probability of Arrival Pathways: Mental Models'
 author: "Annabelle"
 date: "2025-02-12"
 output:
-  pdf_document: default
+  word_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE, echo=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
+## Apparently this includes more checks.. 
+library("VGAM")
+library(patchwork)
+```
+*Currently assuming that we are generating arrivals over 25 years, not 50 years* 
+
+## Wild deer movement from disease front (Wild deer other states --> wild deer VT)
+Measure distance from VT border to place where prevalence is at least .5% (disease front)
+We expect that distance to decrease over time
+*Note - this doesn't ever seed an infection in Vermont directly because it never crosses the border in our time horizon* 
+```{r, echo=FALSE, fig.align = 'center'}
+### Starting distance - where is .5% disease front
+PA_counties_data <- readxl::read_excel("Spread_Diffusion/Data/PACountyPrev_9_8_24.xlsx", col_names = TRUE) # assembled from PA heat map - 7/8/24
+
+head(PA_counties_data)
+
+## Based on the detected prevalence in PA, only two counties are above 5% 
+# Fulton is closer (~360 miles)
+
+starting_distance <- 360 # should be y-intercept 
+
+# 360 = b*3^(-.05x+20)
+b = 1.03247e-07
+x = seq(from = 0, to = 25, by = 1) # years 
+y = b*3^(-.05*x+20) # this is the relationship I expect to see (right shifted negative exponential, not sure what slope should be)
+
+df <- as.data.frame(cbind(x, y))
+
+ggplot(data = df) +
+  geom_line(aes(x = x, y = y, color = "dist")) + 
+  scale_color_manual(
+    values = c("dist" = "darkred")) +
+  labs(y = "Distance from VT border", x = "Time (Years)")
+
+```
+*Not sure what the slope would be here..* 
+
+
+
+## Contaminated Hunting Gear (Wild deer other states --> wild deer VT)
+
+* Nothing formalized in mechanistic breakdown 
+
+Proposed: 
+
+* The number of hunters hunting in CWD positive areas will increase over time 
+* The probability that this will result in prions brought back to Vermont, binding to the soil, and infecting deer stays the same 
+* But prions can infect multiple deer (so Poisson distribution) 
+* We are not accounting for accumulation and decay of prions 
+* The following would be run each year 
+
+```{r, fig.align = 'center', echo=FALSE}
+### Based on TN data, proportion is 0.0552 of hunters hunting out of state
+
+b = 1.03247e-07
+x = seq(from = 0, to = 25, by = 1) # years 
+y = b*3^(.05*x+20) # this is the relationship I expect to see (right shifted negative exponential, not sure what slope should be)
+
+df <- as.data.frame(cbind(x, y))
+
+ggplot(data = df) +
+  geom_line(aes(x = x, y = y, color = "dist")) + 
+  scale_color_manual(
+    values = c("dist" = "darkgreen")) +
+  labs(y = "No Hunters hunting in CWD positive areas", x = "Time (Years)", 
+       title="The no. hunters hunting in CWD+ areas \nincreases over time")
 ```
 
+The intercept and slope are likely wrong here, but I want to set up the mechanisms first 
 
-### Contaminated PPE (Wild deer other states --> wild deer VT)
 
-function of the prevalence in other states - ultimately going to be very low (.027 prob when prev is 40) intercept = -7.2 & slope = .09
+We then use a Poisson distribution to estimate how many hunters are coming back to Vermont,
+the prions the bring with them are binding to the soil, and those prions are infecting wild deer.
 
-```{r, echo=FALSE}
+Using the number of hunters hunting in CWD+ areas each year, we can find the number of infected deer created in Vermont two ways (the following are set around year 10 (n = 600)), either
+a) set up a Poisson distribution with a tiny lambda (.001)
+```{r, fig.align = 'center', echo=FALSE}
+n = 600
+lambda = .01
+hist(rpois(n, lambda = lambda), xlab = "Count of infected deer", main = "Count of infected deer per year \nfrom contaminated hunting gear (rpois)")
+```
+
+or
+b) create a 0-inflated Poisson using a binomial that then calls a Poisson distribution if we have a 1
+
+```{r, fig.align = 'center', echo=FALSE}
+## Manual option 
+# ifelse(rbinom(n, size = 1, prob = p) > 0, 0, rpois(n, lambda = lambda))
+
+## Apparently this includes more checks.. 
+library("VGAM")
+
+n = 600 
+lambda = .01
+p = .0013
+hist(rzipois(n, lambda = lambda, pstr0 = p), xlab = "Count of infected deer", main = "Count of infected deer per year \nfrom contaminated hunting gear (rzipois)")
+```
+
+Pretty similar result so question: Is there value in setting an additional parameter p? (Second approach)
+
+
+```{r, eval = FALSE, echo=FALSE, include = FALSE}
+### ### ### ### ### ### ### ### ### ### ### ### ### ### Old approach 
+
 #https://insects.shinyapps.io/Probability_Dists/
 
 int = -7.2
@@ -42,22 +139,50 @@ ggplot(data = df) +
   geom_line(aes(x = X, y = predicted_prob, color = "ppe")) + 
   scale_color_manual(
     values = c("ppe" = "blue")) +
-  labs(y = "Probability", x = "Prevalence")
+  labs(y = "Annual Probability of the arrival of a single infected deer", x = "Prevalence")
+# 
+# What should n be here? 
+# p is pulled from graph above.. could just assume .0013
 
+## Manual option 
+ifelse(rbinom(n, size = 1, prob = p) > 0, 0, rpois(n, lambda = lambda))
 
+## Apparently this includes more checks.. 
+library("VGAM")
+
+n = 100 
+lambda = 1
+p = .0013
+hist(rzipois(n, lambda = lambda, pstr0 = p))
 ```
 
 
 
 
-### Animal movement (Wild deer other states --> wild deer VT)
-Also needs to be based on distance as well as prevalence 
+## Animal movement (Wild deer other states --> wild deer VT)
 
-The following graph is based on the disease being 20 miles away 
+*Nothing formalized in mechanistic breakdown*
+
+Proposed: 
+
+* As soon as the disease is a certain distance from Vermont (Less than 40 miles?)
+* There is a chance that animals/scavengers can move prions/pieces of carcasses over the Vermont border 
+* So draw from the following (Poisson) probability distribution every year the disease front is a certain distance away 
+
+```{r, fig.align = 'center', echo=FALSE}
+n = 10
+lambda = .1
+hist(rpois(n, lambda = lambda), xlab = "Count of infected deer", main = "Count of infected deer per year \nfrom animal movement (rpois)")
+```
+
+Question - what should n and lambda be?
 
 
 
-```{r, echo=FALSE}
+
+```{r, echo=FALSE, include = FALSE, fig.align = 'center'}
+
+### ### ### ### ### ### ### ### ### ### ### ### ### ### Old approach 
 
 x1 = seq(0, .40, by = 0.01)
 beta0 = -5.95 
@@ -89,17 +214,107 @@ ggplot(data = df) +
 ```
 
 
-### Urine lures (captive other states --> wild deer VT)
 
-risk increases over time (prion accumulation)
 
-two actions:
 
-Ban natural scent-based lures
 
-Ban all scent-based lures (including synthetic)
+## Carcass movement (Wild deer other states --> wild deer VT)
 
-```{r, echo=FALSE}
+**Mechanistic breakdown (parameterized with lit review)**
+
+* No. of Hunters
+* Proportion of hunters hunting in state with CWD
+* prob of harvesting at least one deer
+* proportion of hunters bringing high risk parts back
+* prob( that a deer has CWD | harvested )
+* proportion of deer going to processor
+* probability of disposing of parts on the landscape
+* number of deer interacting with carcass
+* number of days carcass is on landscape
+* prob( infection | exposed to CWD + carcass)
+
+
+
+Lots of actions: 
+
+* A	Ban high risk parts from CWD positive states // movement of parts (status quo) 
+* C	Ban moose parts imports (change language to cervids) // movement of parts 
+* F	Enhanced guidelines for taxidermists/processors // movement of prions in state 
+* H	Private landowner carcass disposal guidelines // compliance + movement of parts 
+* I	Incorporate CWD info during license buying process // compliance 
+* J	Ban high risk parts from out of state for all states regardless of CWD status // movement of parts 
+* L	Ban taxidermists/processors from accepting/handling any parts from outside of Vermont // movement of parts 
+
+
+Proposal: 
+
+1.  Number of hunters hunting in CWD+ areas is a function of time
+2.  Probability of harvesting a deer is a function of actions (compliance)
+3.  Lambda increases over time (is this linear?) (proxy for prevalence increasing)
+4.  This results in a zero-inflated poisson with n = number of hunters, probability = compliance, lambda = prevalence
+
+Q - how do we include movement of parts actions? Change lambda? 
+Q - Ignore distinction between private landowner disposal and processor/taxidermist disposal? 
+
+
+```{r, eval=FALSE, include=FALSE}
+
+### Draw of the number of deer harvested in a CWD area (function of time and prevalence)
+  # Linked to natural movement model 
+
+### Probability of hunter moving parts back (status quo value is a draw from 12%) - change with actions 
+
+# Split into taxidermist + processors (55%) // private landowners (45%)
+
+
+
+x1 = seq(0, .40, by = 0.01)
+beta0 = -2
+beta1 = 6 
+beta2 = 1 
+beta4 = 2 
+
+# Lets say it needs to be at least 40 miles from boarder first, after that, need to normalize from 40 to 0 miles so that have 40 miles = 0 and 0 miles from boarder = 1 
+miles = seq(0, 40, by = 1)
+
+normalize <- function(x, na.rm = TRUE) {
+    return((x- max(x)) /(min(x)-max(x)))
+}
+
+miles_norm <- normalize(miles)
+x2 = 1 ## Basically going to adjust the slope based on how far away the disease is
+mu = (beta0) + (beta1 + beta2*x2)*x1 
+p <- plogis(mu) # need logistic tranformation function (do by hand)
+
+plot(x1, p)
+
+```
+
+
+
+
+
+
+## Urine lures (captive other states --> wild deer VT)
+
+
+**Mechanistic breakdown (parameterized with lit review)**
+* No. of Hunters
+* Percent of hunters using natural lures
+* Total number of lures used per year
+* Probability of a natural lure having CWD / volume of urine put down? (.00003) 
+* prob infection
+
+Not including accumulation
+
+Two actions:
+
+* Ban natural scent-based lures
+* Ban all scent-based lures (including synthetic)
+
+```{r, eval = FALSE, echo=FALSE, include = FALSE, fig.align = 'center'}
+
+### ### ### ### ### ### ### ### ### ### ### ### ### ### Old approach 
 
 int = -7
 slope = .17
@@ -135,63 +350,238 @@ ggplot(data = df) +
   geom_line(aes(x = X, y = prob_ban_all, color = "prob_ban_all")) + 
   scale_color_manual(
     values = c("prob_noaction" = "purple", "prob_nonaturalscents" = "blue", "prob_ban_all" = "black" ),
-    labels = c("Ban all scent-based lures (including synthetic)", "no actions","Ban natural scent lures")  # Manual labels for the legend
+    labels = c("Ban all scent-based lures (including synthetic)", "no actions","Ban natural scent lures (Status Quo)")  # Manual labels for the legend
   )+
   labs(color = "Legend", y = "Probability", x = "Time (years)")
 ```
 
+3 different probability distributions 
+I set these up by establishing the mean and variance for each action and then fitting those to a beta distribution 
+The histograms show the probability of seeding the infection of a single deer each year from 1000 simulations
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE}
+est_beta_params <- function(mu, var) {
+  # check that the var <mu(1-mu), if greater, use the largest possible
+  if(var > mu*(1-mu)){var = mu*(1-mu)-.00001}
+  alpha <- ((1 - mu) / var - 1 / mu) * mu ^ 2
+  beta <- alpha * (1 / mu - 1)
+  return(params = list(alpha = alpha, beta = beta))
+}
+
+
+prob_noaction_mu = .02
+prob_nonaturalscents_mu = .007
+prob_ban_all_mu = .0025
+
+prob_noaction_var = .005
+prob_nonaturalscents_var = .0025
+prob_ban_all_var = .0005
+
+### Make baby data table 
+
+means <- c(prob_noaction_mu, prob_nonaturalscents_mu, prob_ban_all_mu)
+vars <- c(prob_noaction_var, prob_nonaturalscents_var, prob_ban_all_var)
+
+showdf <- as.data.frame(rbind(means, vars))
+colnames(showdf) <- c("No Action", "No Natural Scents (Status Quo)", "Ban All")
+
+showdf
+
+
+b_params_noact <- est_beta_params(prob_noaction_mu, prob_noaction_var)
+b_params_nonaturalscents <- est_beta_params(prob_nonaturalscents_mu, prob_nonaturalscents_var)
+b_params_ban_all <- est_beta_params(prob_ban_all_mu, prob_ban_all_var)
+
+noaction_sim <- rbeta(1000, b_params_noact$alpha, b_params_noact$beta)
+nonaturalscents_sim <- rbeta(1000, b_params_nonaturalscents$alpha, b_params_nonaturalscents$beta)
+ban_all_sim <- rbeta(1000, b_params_ban_all$alpha, b_params_ban_all$beta)
+
+prob_sims_df <- cbind(noaction_sim, nonaturalscents_sim, ban_all_sim)
+
+# ggplot(data = prob_sims_df) +
+#   geom_histogram(aes(x = noaction_sim, fill = "prob_noaction")) + 
+#   geom_histogram(aes(x = nonaturalscents_sim, fill = "prob_nonaturalscents")) + 
+#   geom_histogram(aes(x = ban_all_sim, fill = "prob_ban_all")) + 
+#   scale_color_manual(
+#     values = c("prob_noaction" = "purple", "prob_nonaturalscents" = "blue", "prob_ban_all" = "grey" ),
+#     labels = c("Ban all scent-based lures (including synthetic)", "no actions","Ban natural scent lures (Status Quo)")  # Manual labels for the legend
+#   )+
+#   labs(color = "Legend", y = "Probability", x = "Time (years)")
+
+p_noact <- ggplot(data = prob_sims_df) +
+  geom_histogram(aes(x = noaction_sim)) + 
+  labs(x = "Annual probability of seeding the infection of a single deer", title = "No Actions") +
+  ylim(0,1000) +
+  coord_cartesian(xlim = c(NA, .1))
+p_natural <- ggplot(data = prob_sims_df) +
+  geom_histogram(aes(x = nonaturalscents_sim)) + 
+  labs( x = "Annual probability of seeding the infection of a single deer", title = "No Natural Scents \n (Status Quo)") +
+  ylim(0,1000) +
+  coord_cartesian(xlim = c(NA, .1))
+p_banall <- ggplot(data = prob_sims_df) +
+  geom_histogram(aes(x = ban_all_sim)) + 
+  labs(x = "Annual probability of seeding the infection of a single deer", title = "Ban All") +
+  coord_cartesian(xlim = c(NA, .1))
+
+
+(p_noact + p_natural + p_banall) +
+plot_layout(axis_titles = "collect")
+
+```
+
+So how many hunters are using lures in the state? (this is n (per year?))
+
+Two options:
+
+* Instead of having different ns for each action, lets assume that the level of us is included in the probability 
+* n would be different for each action, no?
+  * No action = number hunters using lures
+  * ban natural lures = number hunters using lures
+  * ban all lures = number of bad actors using natural
+
+Currently using The proportion of hunters using natural lures (.05) * no. Vermont Hunters (63600) for n
+
+Also not sure what we put for lambda here... (.01?)
+Just using the average (mu) for each action, not sure if that's right 
+
+```{r, echo=FALSE}
+# proportion of hunters hunting out state
+prop_use_natural_lures <- .05 
+noVThunters <- 63600
+
+prob_noaction_mu = .02
+prob_nonaturalscents_mu = .007
+prob_ban_all_mu = .0025
+
+n = prop_use_natural_lures* noVThunters
+lambda = .01
+
+hist(rzipois(n, lambda = lambda, pstr0 = prob_noaction_mu), xlab = "Count of infected deer", main = "No Action")
+hist(rzipois(n, lambda = lambda, pstr0 = prob_nonaturalscents_mu), xlab = "Count of infected deer", main = "No Natural Scents \n (Status Quo)")
+hist(rzipois(n, lambda = lambda, pstr0 = prob_ban_all_mu), xlab = "Count of infected deer", main = "Ban All")
+
+# main = "Count of infected deer per year \nfrom animal movement (rpois)"
+# These plots all look the same
+```
 
 
 
-### Carcass movement (Wild deer other states --> wild deer VT)
-Also needs to be based on distance as well as prevalence  
+## Fenceline interactions (Captive deer VT --> wild deer VT)
 
-Lots of actions: 
 
-* A	Ban high risk parts from CWD positive states // movement of parts (status quo) 
-* C	Ban moose parts imports (change language to cervids) // movement of parts 
-* F	Enhanced guidelines for taxidermists/processors // movement of prions in state 
-* H	Private landowner carcass disposal guidelines // compliance + movement of parts 
-* I	Incorporate CWD info during license buying process // compliance 
-* J	Ban high risk parts from out of state for all states regardless of CWD status // movement of parts 
-* L	Ban taxidermists/processors from accepting/handling any parts from outside of Vermont // movement of parts 
+**Mechanistic breakdown (parameterized with lit review)**
 
+* Number of captive cervid facilities
+* prob( a captive cervid is infected | exposure) 
+* total number of captive deer
+* prob of direct contact [.2628]
+* prob ( infection | contact ) [.333]
+
+Actions: 
+
+* A	Double fencing  (results in probability being halved? )
+* B Close captive facilities 
 
 Proposal: 
 
-1.  Draw the number of deer harvested in a CWD+ area (this would be a function of time and prevalence - likely linked to natural movement model) 
-2.  Draw the probability of a hunter moving parts back (at status quo is average of 12%, change with actions) 
-3.  Probability of disposing on the landscape (split between taxidermists + processors vs private landowners, change with actions) 
+1.  For each positive DETECTED at a captive cervid farm (this is run in parallel with the population model), 
+2.  Run a zero-inflated Poisson distribution using probability from lit review and set rate (n = average number of deer? - this would probably overestimate --> set to 10 )
 
-```{r, eval=FALSE, include=FALSE}
+unsure what to put for lambda here(.1)? 
 
-### Draw of the number of deer harvested in a CWD area (function of time and prevalence)
-  # Linked to natural movement model 
+```{r, echo=FALSE}
+prob <- .2628 * .333
+lambda = .1
+n = 10 
 
-### Probability of hunter moving parts back (status quo value is a draw from 12%) - change with actions 
+hist(rzipois(n, lambda = lambda, pstr0 = prob), xlab = "Count of infected deer", main = "Status Quo")
 
-# Split into taxidermist + processors (55%) // private landowners (45%)
-
-
-
-x1 = seq(0, .40, by = 0.01)
-beta0 = -2
-beta1 = 6 
-beta2 = 1 
-beta4 = 2 
-
-# Lets say it needs to be at least 40 miles from boarder first, after that, need to normalize from 40 to 0 miles so that have 40 miles = 0 and 0 miles from boarder = 1 
-miles = seq(0, 40, by = 1)
-
-normalize <- function(x, na.rm = TRUE) {
-    return((x- max(x)) /(min(x)-max(x)))
-}
-
-miles_norm <- normalize(miles)
-x2 = 1 ## Basically going to adjust the slope based on how far away the disease is
-mu = (beta0) + (beta1 + beta2*x2)*x1 
-p <- plogis(mu) # need logistic tranformation function (do by hand)
-
-plot(x1, p)
+hist(rzipois(n, lambda = lambda, pstr0 = prob*.5), xlab = "Count of infected deer", main = "Double fencing")
 
 ```
+
+If facilities are closed, this would just be 0. 
+
+
+
+
+
+
+## Breakouts (Captive deer VT --> wild deer VT)
+
+
+**Mechanistic breakdown (parameterized with lit review)** 
+Given you are able to recover the deer:
+
+* number of proximity events over the coarse of a days escape
+* Probability of deer making direct contact given they are in the same area
+* number of days a deer escapes given it is recovered
+* number of days in a year
+* prob ( infection | contact ) 
+
+Given you are not able to recover the deer:
+
+* number of proximity events over the coarse of a days escape
+* Probability of deer making direct contact given they are in the same area
+* number of days in a year
+* prob ( infection | contact ) 
+
+Are we accounting for indirect contact here?
+
+
+Actions: 
+
+* A	Double fencing  (results in probability being halved? )
+* B Close captive facilities 
+
+Proposal: 
+
+1.  Run a Poisson distribution using probability from lit review (n = average number of deer? - this would probably overestimate --> set to 10 )
+
+
+
+## Environemental contamination (Captive deer VT --> wild deer VT)
+
+
+**Nothing formalized in mechanistic breakdown**
+
+
+Actions: 
+
+* A	Double fencing  (results in probability being halved? )
+* B Close captive facilities 
+
+Proposal: 
+
+1.  Run a Poisson distribution using probability from lit review (n = average number of deer? - this would probably overestimate --> set to 10 )
+
+
+
+## Carcass disposal of captives (Captive deer VT --> wild deer VT)
+
+
+**Mechanistic breakdown (parameterized with lit review)**
+
+* prob( at least 1 captive cervid is infected | exposure) 
+* total number of captive deer
+* proportion of captive deer in facility butchered / year
+* probability of disposing of parts on the landscape
+* number of deer interacting with carcass
+* number of days carcass is on landscape
+* prob( infection | exposed to CWD + carcass)
+
+
+Actions: 
+
+* A	Double fencing  (results in probability being halved? )
+* B Close captive facilities 
+
+Proposal: 
+
+1.  All captive cervids are tested post-mortum, correct? So this wouldn't be a pathways?
+
+
+
+
+
+

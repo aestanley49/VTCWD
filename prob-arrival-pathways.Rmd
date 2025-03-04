@@ -19,14 +19,21 @@ library(patchwork)
 *Currently assuming that we are generating arrivals over 25 years, not 50 years* 
 
 ## Wild deer movement from disease front (Wild deer other states --> wild deer VT)
+
+* Nothing formalized in mechanistic breakdown 
+
+Proposed: 
+
+* Poisson arrival distribution  
+* Distance of front is a predictor, as is natal dispersal 
+
 Measure distance from VT border to place where prevalence is at least .5% (disease front)
-We expect that distance to decrease over time
-*Note - this doesn't ever seed an infection in Vermont directly because it never crosses the border in our time horizon* 
+We expect that distance to decrease over time; Do we expect it to reach Vermont?
 ```{r, echo=FALSE, fig.align = 'center'}
 ### Starting distance - where is .5% disease front
 PA_counties_data <- readxl::read_excel("Spread_Diffusion/Data/PACountyPrev_9_8_24.xlsx", col_names = TRUE) # assembled from PA heat map - 7/8/24
 
-head(PA_counties_data)
+# head(PA_counties_data)
 
 ## Based on the detected prevalence in PA, only two counties are above 5% 
 # Fulton is closer (~360 miles)
@@ -47,7 +54,64 @@ ggplot(data = df) +
   labs(y = "Distance from VT border", x = "Time (Years)")
 
 ```
-*Not sure what the slope would be here..* 
+
+*Not sure what the slope would be here..*
+
+
+```{r, echo=FALSE}
+## Source : https://www.jstor.org/stable/pdf/1382386.pdf
+## Might be newer data but didn't see it here - https://academic.oup.com/jmammal/article-pdf/86/3/623/7026399/86-3-623.pdf
+
+distanceskm <- c(4,8,12,16,20,24,28,32,36,40,56)
+femalecount <- c(28,0,0,0,1,1,0,0,2,0,3)
+malecount <- c(17,8,9,2,1,0,1,0,3,2,1)
+
+distancemiles <- 0.621371 * distanceskm
+
+dispersal_1993 <- data.frame(distancemiles, femalecount, malecount)
+
+# Change from count to % 
+dispersal_1993$femalepercent <- femalecount / (sum(femalecount))
+dispersal_1993$malepercent <- malecount / (sum(malecount))
+
+```
+
+```{r, echo=FALSE}
+int = 3 
+slope1 = -.09 # because smaller distance increases likelihood
+
+distfromVT = seq(0, 360, by = 1)
+predicted_prob = plogis(int + slope1*distfromVT)
+
+plot(distfromVT, predicted_prob, main = "Probability of a single infection walking \nto Vermont", 
+     xlab = "Distance from Vermont", ylab = "Probability")
+
+
+## Now include natal dispersal 
+slope2 = .05 # positive because larger distance increases likelihood
+
+natal = seq(0, 40, by = 5)
+
+## Will have to draw natal disperstion for each individual?? 
+
+predicted_prob = plogis(int + (slope1*distfromVT + slope2*40) )
+plot(distfromVT, predicted_prob, main = "Probability of a single infection walking \nto Vermontnset natal dispersal (40 mi)", 
+     xlab = "Distance from Vermont", ylab = "Probability")
+```
+
+"plogis(int + (slope1*distfromVT + slope2*40)"
+
+
+so now what do we set n as?
+lambda is pulled from above probability depending on distance and random draw of natal dist
+do we pull random distribution of natal for each individual?
+
+```{r, echo=FALSE}
+n = 600
+lambda = .01
+hist(rpois(n, lambda = lambda), xlab = "Count of infected deer", main = "Count of infected deer per year \nfrom contaminated hunting gear (rpois)")
+```
+
 
 
 
@@ -80,8 +144,6 @@ ggplot(data = df) +
        title="The no. hunters hunting in CWD+ areas \nincreases over time")
 ```
 
-The intercept and slope are likely wrong here, but I want to set up the mechanisms first 
-
 
 We then use a Poisson distribution to estimate how many hunters are coming back to Vermont,
 the prions the bring with them are binding to the soil, and those prions are infecting wild deer.
@@ -94,23 +156,6 @@ lambda = .01
 hist(rpois(n, lambda = lambda), xlab = "Count of infected deer", main = "Count of infected deer per year \nfrom contaminated hunting gear (rpois)")
 ```
 
-or
-b) create a 0-inflated Poisson using a binomial that then calls a Poisson distribution if we have a 1
-
-```{r, fig.align = 'center', echo=FALSE}
-## Manual option 
-# ifelse(rbinom(n, size = 1, prob = p) > 0, 0, rpois(n, lambda = lambda))
-
-## Apparently this includes more checks.. 
-library("VGAM")
-
-n = 600 
-lambda = .01
-p = .0013
-hist(rzipois(n, lambda = lambda, pstr0 = p), xlab = "Count of infected deer", main = "Count of infected deer per year \nfrom contaminated hunting gear (rzipois)")
-```
-
-Pretty similar result so question: Is there value in setting an additional parameter p? (Second approach)
 
 
 ```{r, eval = FALSE, echo=FALSE, include = FALSE}
@@ -165,56 +210,31 @@ hist(rzipois(n, lambda = lambda, pstr0 = p))
 
 Proposed: 
 
-* As soon as the disease is a certain distance from Vermont (Less than 40 miles?)
-* There is a chance that animals/scavengers can move prions/pieces of carcasses over the Vermont border 
-* So draw from the following (Poisson) probability distribution every year the disease front is a certain distance away 
+* Likelihood of animals/scavengers can move prions/pieces of carcasses over the Vermont border is a function of how far away the disease is 
+* So draw from the following (Poisson) probability distribution every year based on distance of disease front 
 
+```{r}
+int = 1 
+slope1 = -.09 # because smaller distance increases likelihood
+
+distfromVT = seq(0, 360, by = 1)
+predicted_prob = plogis(int + slope1*distfromVT)
+
+
+plot(distfromVT, predicted_prob, main = "Probability of a single infection \nfrom scavenger movement", 
+     xlab = "Distance from Vermont", ylab = "Probability")
+```
+
+Do we need to modify lambda or just pull resulting probability from graph above? 
+lambda = n*p.... 
+Need to clarify how this translates to parameters in r function...
 ```{r, fig.align = 'center', echo=FALSE}
 n = 10
-lambda = .1
+lambda = .6
 hist(rpois(n, lambda = lambda), xlab = "Count of infected deer", main = "Count of infected deer per year \nfrom animal movement (rpois)")
 ```
 
 Question - what should n and lambda be?
-
-
-
-
-```{r, echo=FALSE, include = FALSE, fig.align = 'center'}
-
-### ### ### ### ### ### ### ### ### ### ### ### ### ### Old approach 
-
-x1 = seq(0, .40, by = 0.01)
-beta0 = -5.95 
-beta1 = 6 
-beta2 = 1 
-
-# Lets say it needs to be at least 40 miles from boarder first, after that, need to normalize from 40 to 0 miles so that have 40 miles = 0 and 0 miles from boarder = 1 
-miles = seq(0, 40, by = 1)
-
-normalize <- function(x, na.rm = TRUE) {
-    return((x- max(x)) /(min(x)-max(x)))
-}
-
-miles_norm <- normalize(miles)
-x2 = .5 ## Basically going to adjust the slope based on how far away the disease is
-mu = (beta0) + (beta1 + beta2*x2)*x1 
-p <- plogis(mu) # need logistic tranformation function (do by hand)
-
-# plot(x1, p)
-
-df <- as.data.frame(cbind(x1, p))
-
-ggplot(data = df) +
-  geom_line(aes(x = x1, y = p, color = "animal_move")) + 
-  scale_color_manual(
-    values = c("animal_move" = "purple")) +
-  labs(y = "Probability", x = "Prevalence")
-
-```
-
-
-
 
 
 
@@ -248,47 +268,201 @@ Lots of actions:
 
 Proposal: 
 
-1.  Number of hunters hunting in CWD+ areas is a function of time
-2.  Probability of harvesting a deer is a function of actions (compliance)
-3.  Lambda increases over time (is this linear?) (proxy for prevalence increasing)
-4.  This results in a zero-inflated poisson with n = number of hunters, probability = compliance, lambda = prevalence
+1.  Number of hunters hunting in CWD+ areas is a function of time (this is n)
+2.  Lambda increases over time - function of compliance, distance of disease, and likelihood of parts moving 
 
-Q - how do we include movement of parts actions? Change lambda? 
-Q - Ignore distinction between private landowner disposal and processor/taxidermist disposal? 
+Q - Ignore distinction between private landowner disposal and processor/taxidermist disposal? I have these as same effect size in the model
+
+For each of the actions, I have a relationship set up, but I'm not sure if we want to see each of these individually
+The gist is that the slope of the probability is modified by actions labeled compliance, and slop is modified by both the distance of the disease and the movement of parts (more movement increases probability)
+There is one action that changes slope and intercept because I think that would impact compliance and number of parts that would be moved. 
+
+Q - What combinations do we want to see here? 
+```{r, echo = FALSE, include=FALSE}
+
+### ### ### Set up Null model 
+
+### intercept 
+# modified by compliance
+### Slope
+# modified by prevalence distance
+# modified by movement of parts 
+
+int = 1 
+slope1 = -.01 # because smaller distance increases likelihood
+
+compliance <- -1 # large negative number reduces probability 
+likelihoodpartsmove <- -9 # large negative number reduces probability 
+
+distfromVT = seq(0, 360, by = 1)
+predicted_prob = plogis((int + compliance) + (slope1*distfromVT + likelihoodpartsmove))
+
+plot(distfromVT, predicted_prob)
+
+### ### ### Set up how strong leavers should be 
+
+### ### Include Action A 
+### A	Ban high risk parts from CWD positive states // movement of parts (status quo) 
+
+compliance <- 0 # turn off
+ActionA <- 1
+betaA <- -.5
+
+predicted_prob = plogis((int + compliance) + (slope1*distfromVT + ActionA*betaA))
+
+plot(distfromVT, predicted_prob)
 
 
-```{r, eval=FALSE, include=FALSE}
 
-### Draw of the number of deer harvested in a CWD area (function of time and prevalence)
-  # Linked to natural movement model 
+### ### Include Action C
+### C	Ban moose parts imports (change language to cervids) // movement of parts  
 
-### Probability of hunter moving parts back (status quo value is a draw from 12%) - change with actions 
+compliance <- 0 # turn off
+ActionA <- 0
+ActionC <- 1
+betaC <- -.05
 
-# Split into taxidermist + processors (55%) // private landowners (45%)
+predicted_prob = plogis((int + compliance) + (slope1*distfromVT + ActionA*betaA + ActionC*betaC))
+
+plot(distfromVT, predicted_prob)
 
 
 
-x1 = seq(0, .40, by = 0.01)
-beta0 = -2
-beta1 = 6 
-beta2 = 1 
-beta4 = 2 
+### ### Include Action F
+### F	Enhanced guidelines for taxidermists/processors // movement of prions in state   
 
-# Lets say it needs to be at least 40 miles from boarder first, after that, need to normalize from 40 to 0 miles so that have 40 miles = 0 and 0 miles from boarder = 1 
-miles = seq(0, 40, by = 1)
+compliance <- 0 # turn off
+ActionA <- 0
+ActionC <- 0
+ActionF <- 1
+betaF <- -2
 
-normalize <- function(x, na.rm = TRUE) {
-    return((x- max(x)) /(min(x)-max(x)))
-}
+predicted_prob = plogis((int + compliance) + (slope1*distfromVT + ActionA*betaA + ActionC*betaC + ActionF*betaF))
 
-miles_norm <- normalize(miles)
-x2 = 1 ## Basically going to adjust the slope based on how far away the disease is
-mu = (beta0) + (beta1 + beta2*x2)*x1 
-p <- plogis(mu) # need logistic tranformation function (do by hand)
+plot(distfromVT, predicted_prob)
 
-plot(x1, p)
 
+### ### Include Action H
+### H	Private landowner carcass disposal guidelines // compliance + movement of parts  
+
+# Assuming this will be same order of magnitude as tax/processor 
+# but also adding changes to the intercept for compliance
+
+compliance <- 0 # turn off
+ActionA <- 0
+ActionC <- 0
+ActionF <- 0
+ActionH1 <- 1
+betaH1 <- -2
+ActionH2 <- 1
+betaH2 <- -.5
+
+predicted_prob = plogis((int + ActionH2*betaH2) + (slope1*distfromVT + ActionA*betaA + ActionC*betaC + ActionF*betaF + ActionH1*betaH1))
+
+plot(distfromVT, predicted_prob)
+
+
+### ### Include Action I
+### I	Incorporate CWD info during license buying process // compliance 
+
+compliance <- 0 # turn off
+ActionA <- 0
+ActionC <- 0
+ActionF <- 0
+ActionH1 <- 0
+ActionH2 <- 0
+ActionI <- 1
+betaI <- -4
+
+predicted_prob = plogis((int + ActionH2*betaH2 + ActionI*betaI) + (slope1*distfromVT + ActionA*betaA + ActionC*betaC + ActionF*betaF + ActionH1*betaH1))
+
+plot(distfromVT, predicted_prob)
+
+
+
+
+### ### Include Action J
+### J	Ban high risk parts from out of state for all states regardless of CWD status // movement of parts
+
+compliance <- 0 # turn off
+ActionA <- 0
+ActionC <- 0
+ActionF <- 0
+ActionH1 <- 0
+ActionH2 <- 0
+ActionI <- 0
+ActionJ <- 1
+betaJ <- -4
+
+
+predicted_prob = plogis((int + ActionH2*betaH2 + ActionI*betaI) + (slope1*distfromVT + ActionA*betaA + ActionC*betaC + ActionF*betaF + ActionH1*betaH1 + ActionJ*betaJ))
+
+plot(distfromVT, predicted_prob)
+
+
+
+### ### Include Action L
+### L	Ban taxidermists/processors from accepting/handling any parts from outside of Vermont // movement of parts 
+
+compliance <- 0 # turn off
+ActionA <- 0
+ActionC <- 0
+ActionF <- 0
+ActionH1 <- 0
+ActionH2 <- 0
+ActionI <- 0
+ActionJ <- 0
+ActionL <- 1
+betaL <- -4
+
+
+predicted_prob = plogis((int + ActionH2*betaH2 + ActionI*betaI) + (slope1*distfromVT + ActionA*betaA + ActionC*betaC + ActionF*betaF + ActionH1*betaH1 + ActionJ*betaJ + ActionL*betaL))
+
+plot(distfromVT, predicted_prob)
+
+### Not sure which combinations to show... 
+
+# df <- as.data.frame(cbind(x1, p))
+# 
+# ggplot(data = df) +
+#   geom_line(aes(x = x1, y = p, color = "animal_move")) + 
+#   scale_color_manual(
+#     values = c("animal_move" = "purple")) +
+#   labs(y = "Probability", x = "Prevalence")
 ```
+
+
+n would be based on the following.. 
+```{r, fig.align = 'center', echo=FALSE}
+### Based on TN data, proportion is 0.0552 of hunters hunting out of state
+
+b = 1.03247e-07
+x = seq(from = 0, to = 25, by = 1) # years 
+y = b*3^(.05*x+20) # this is the relationship I expect to see (right shifted negative exponential, not sure what slope should be)
+
+df <- as.data.frame(cbind(x, y))
+
+ggplot(data = df) +
+  geom_line(aes(x = x, y = y, color = "dist")) + 
+  scale_color_manual(
+    values = c("dist" = "darkgreen")) +
+  labs(y = "No Hunters hunting in CWD positive areas", x = "Time (Years)", 
+       title="The no. hunters hunting in CWD+ areas \nincreases over time")
+```
+
+Draw n depending on the time step
+
+
+Do we need to modify lambda or just pull resulting probability from graph above? 
+lambda = n*p.... 
+Need to clarify how this translates to parameters in r function...
+```{r, fig.align = 'center', echo=FALSE}
+n = 10
+lambda = .6
+hist(rpois(n, lambda = lambda), xlab = "Count of infected deer", main = "Count of infected deer per year \nfrom animal movement (rpois)")
+```
+
+
 
 
 
@@ -312,48 +486,6 @@ Two actions:
 * Ban natural scent-based lures
 * Ban all scent-based lures (including synthetic)
 
-```{r, eval = FALSE, echo=FALSE, include = FALSE, fig.align = 'center'}
-
-### ### ### ### ### ### ### ### ### ### ### ### ### ### Old approach 
-
-int = -7
-slope = .17
-beta1 = -.07 #for action 1
-beta2 = -.14 # for action 2
-
-X = seq(0, 25, by = 1) # time (25 years)
-
-x1 = action1 = 0 # ban natural scent-based lures
-x2 = action2 = 0 # ban all lures 
-
-prob_noaction = plogis(int + X*(slope + beta1*x1 + beta2*x2))
-
-# If only ban scent-based 
-x1 = actionB = 1 # ban natural scent-based lures
-x2 = actionK = 0 # ban all lures 
-
-prob_nonaturalscents = plogis(int + X*(slope + beta1*x1 + beta2*x2))
-
-# If ban all 
-
-x1 = action1 = 0 # ban natural scent-based lures
-x2 = action2 = 1 # ban all lures 
-
-prob_ban_all = plogis(int + X*(slope + beta1*x1 + beta2*x2))
-# plot(X, predicted_prob)
-
-df <- as.data.frame(cbind(X, prob_noaction, prob_nonaturalscents, prob_ban_all))
-## This is off... 
-ggplot(data = df) +
-  geom_line(aes(x = X, y = prob_noaction, color = "prob_noaction")) + 
-  geom_line(aes(x = X, y = prob_nonaturalscents, color = "prob_nonaturalscents")) + 
-  geom_line(aes(x = X, y = prob_ban_all, color = "prob_ban_all")) + 
-  scale_color_manual(
-    values = c("prob_noaction" = "purple", "prob_nonaturalscents" = "blue", "prob_ban_all" = "black" ),
-    labels = c("Ban all scent-based lures (including synthetic)", "no actions","Ban natural scent lures (Status Quo)")  # Manual labels for the legend
-  )+
-  labs(color = "Legend", y = "Probability", x = "Time (years)")
-```
 
 3 different probability distributions 
 I set these up by establishing the mean and variance for each action and then fitting those to a beta distribution 
